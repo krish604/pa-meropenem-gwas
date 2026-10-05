@@ -1,0 +1,15 @@
+# STAND-IN FIXTURE - NOT STAGE OUTPUT, NOT BIOLOGICAL RESULTS
+# This file stands in for the output of spec.md D1 stage 6a (`cohort_variants`),
+# which has no implementation. It exists so the DAG edge spec.md D6 requires -
+# a per-sample stage feeding a cohort stage - is resolvable, and so TEST mode
+# can exercise the path.
+#
+# Its header is PROVISIONAL. The real output contract is an open question: see
+# docs/design/cohort-variant-merge.md. Do not treat these columns as settled,
+# and do not write a consumer against them. The row below is a single labelled
+# placeholder, not a count of anything.
+#
+# DELETE WITH TICKET 14. If you are reading this in a scientific result, you
+# have a stand-in where a result should be.
+chrom	pos	ref	alt	ac	an	af
+STANDIN	standin_not_computed	STANDIN	A	standin_not_computed	standin_not_computed	standin_not_computed

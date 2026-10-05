@@ -1,0 +1,5 @@
+{
+  "quantity": "patristic distance",
+  "definition": "expected substitutions per site, summed along the stage-9 tree",
+  "is_a_snp_count": false
+}

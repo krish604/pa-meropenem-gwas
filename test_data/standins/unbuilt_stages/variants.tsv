@@ -1,0 +1,12 @@
+# STAND-IN FIXTURE - NOT STAGE OUTPUT, NOT BIOLOGICAL RESULTS
+# This file stands in for the output of spec.md D1 stage 6 (`variants`), which
+# has no implementation. It exists so the DAG edge spec.md D6 requires -
+# gwas consumes the SNP/indel feature family - can be declared in TEST without
+# the stage fabricating output it has not computed.
+# ticket 14 builds the stage; this file is deleted then. See TASKS.md.
+# One row: stage_spec() requires non_empty and min_rows(1) of every stage's
+# principal table, and nothing parses this file.
+# DELETE WITH TICKET 14. If you are reading this in a scientific result, you
+# have a stand-in where a result should be.
+sample_id	position	reference	alternate	variant_type	call_status
+TEST_PA_001	standin_not_computed	STANDIN	A	snp	standin_not_called

@@ -1,0 +1,9 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+# detection does not imply phenotypic resistance
+sample_id	antibiotic	determinant	gene	variant	determinant_type	mechanism	evidence_source	database	database_version	confidence	claim_status	identity_pct	coverage_pct
+TEST_PA_001	imipenem	blaNDM-1~SYNTHETIC_ALLELE	blaNDM-1	SYNTHETIC_ALLELE	acquired	acquired_determinant	synthetic_amrfinder_emulator	SYNTHETIC_DB	v0-synthetic	99.0	DETECTED	99.5	100.0
+TEST_PA_011	imipenem	blaKPC-2~SYNTHETIC_ALLELE	blaKPC-2	SYNTHETIC_ALLELE	acquired	acquired_determinant	synthetic_amrfinder_emulator	SYNTHETIC_DB	v0-synthetic	99.0	DETECTED	99.5	100.0
+TEST_PA_014	imipenem	blaTEM-1~SYNTHETIC_ALLELE	blaTEM-1	SYNTHETIC_ALLELE	acquired	acquired_determinant	synthetic_amrfinder_emulator	SYNTHETIC_DB	v0-synthetic	99.0	DETECTED	99.5	100.0
+TEST_PA_015	imipenem	blaKPC-2~SYNTHETIC_ALLELE	blaKPC-2	SYNTHETIC_ALLELE	acquired	acquired_determinant	synthetic_amrfinder_emulator	SYNTHETIC_DB	v0-synthetic	99.0	DETECTED	99.5	100.0
+TEST_PA_017	imipenem	blaVIM-1~SYNTHETIC_ALLELE	blaVIM-1	SYNTHETIC_ALLELE	acquired	acquired_determinant	synthetic_amrfinder_emulator	SYNTHETIC_DB	v0-synthetic	99.0	DETECTED	99.5	100.0

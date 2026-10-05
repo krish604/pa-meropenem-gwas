@@ -1,0 +1,59 @@
+# Beta-lactam enzyme family nomenclature for the pilot-100 analysis.
+# ---------------------------------------------------------------------------
+# WHY THIS TABLE EXISTS
+#
+# AMRFinderPlus reports a single Class value of `BETA-LACTAM` for every
+# beta-lactamase, with Subclass values of CEPHALOSPORIN, BETA-LACTAM or
+# CARBAPENEM. It does NOT distinguish extended-spectrum beta-lactamases
+# (ESBL) from metallo-beta-lactamases (MBL). Verified on the
+# AMRFinderPlus database version 2026-08-07.1 used for this pilot.
+#
+# So the ESBL / MBL / other-beta-lactamase split cannot be read out of the
+# AMRFinderPlus class and subclass fields. It has to come from somewhere,
+# and the honest place for it is a reviewable, editable data table like this
+# one - not buried in an analysis script.
+#
+# PROVENANCE AND LIMITS - read before using these labels
+#
+# These families follow standard, widely used beta-lactamase enzyme-family
+# nomenclature (the same families used by CARD, AMRFinder and the wider
+# literature). They are a NAME-BASED classification, not an experimental
+# result. Nothing here was measured: no isolate was phenotyped for ESBL or
+# MBL activity, and no enzyme characterisation was performed.
+#
+# Consequences:
+#   * a gene in the MBL family is reported as an MBL *by nomenclature*;
+#   * a gene in the ESBL family is reported as an ESBL *by nomenclature*;
+#   * neither label says the enzyme is expressed in that isolate;
+#   * neither label says the isolate is clinically resistant to that class;
+#   * an unlisted beta-lactamase is reported as "Other beta-lactamase", never
+#     guessed into ESBL or MBL.
+#
+# Gene matching is by exact element symbol. `blaVIM` matches `blaVIM-6`
+# because the table entry carries an explicit wildcard-free prefix and the
+# matcher strips a trailing `-\d+` allele number before comparing.
+#
+# family       : the functional category reported
+# gene_prefix  : element-symbol prefix to match, before allele-number stripping
+# basis        : nomenclature | amrfinder_subclass
+# notes        : the caveat carried into the report
+family	gene_prefix	basis	notes
+MBL	blaVIM	nomenclature	Metallo-beta-lactamase family by gene nomenclature. Not phenotypically confirmed.
+MBL	blaNDM	nomenclature	Metallo-beta-lactamase family by gene nomenclature. New Delhi metallo-beta-lactamase.
+MBL	blaIMP	nomenclature	Metallo-beta-lactamase family by gene nomenclature. Imported metallo-beta-lactamase.
+MBL	blaSPM	nomenclature	Metallo-beta-lactamase family by gene nomenclature. São Paulo metallo-beta-lactamase.
+MBL	blaGME	nomenclature	Metallo-beta-lactamase family by gene nomenclature. Groningen metallo-beta-lactamase.
+MBL	blaCMZ	nomenclature	Metallo-beta-lactamase family by gene nomenclature.
+ESBL	blaTEM	nomenclature	Extended-spectrum beta-lactamase family by gene nomenclature. blaTEM-1 alone is not ESBL; the extended-spectrum alleles are.
+ESBL	blaCTX	nomenclature	Extended-spectrum beta-lactamase family by gene nomenclature. CTX-M enzymes.
+ESBL	blaSHV	nomenclature	Extended-spectrum beta-lactamase family by gene nomenclature.
+ESBL	blaOXA	nomenclature	Oxacillinase family. Broad and heterogeneous: includes non-ESBL and carbapenem-hydrolysing members. Treat as a family label only.
+ESBL	blaPER	nomenclature	Extended-spectrum beta-lactamase family by gene nomenclature.
+ESBL	blaGES	nomenclature	Extended-spectrum beta-lactamase family by gene nomenclature.
+ESBL	blaVPE	nomenclature	Extended-spectrum beta-lactamase family by gene nomenclature.
+ESBL	blaMESA	nomenclature	Extended-spectrum beta-lactamase family by gene nomenclature.
+# NOT listed above, deliberately: blaKPC, blaGES and class A carbapenemases
+# (KPC) are serine carbapenemases, NOT metallo-beta-lactamases. They are
+# left unlisted so they fall through to the AMRFinderPlus subclass
+# (CARBAPENEM) and are reported as "Other beta-lactamase", which is correct.
+# Labelling KPC as an MBL would be a factual error.

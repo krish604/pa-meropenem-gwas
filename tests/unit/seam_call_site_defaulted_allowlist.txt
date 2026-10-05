@@ -1,0 +1,78 @@
+# Allowlist: defaulted parameters `run.py` does not pass at a stage call site
+
+Read by `tests/unit/test_seam_stage_call_arity.py` (`PartFour`). One entry per
+line:
+
+    <module> <parameter> :: <one-line reason>
+
+`<module>` is the dotted stage module, `<parameter>` is the parameter name. The
+reason is mandatory and must be specific to *that* parameter at *that* call site
+- a reason that would fit any entry is not a reason.
+
+**Why this file exists.** A stage parameter with **no default** is caught by
+`inspect.Signature.bind`: omitting it is a `TypeError`. A parameter **with** a
+default is invisible to `bind`, because omitting it is legal Python and the
+stage simply receives the default. Every default in this codebase is `None`, an
+empty container, or a small constant, and for a stage that means one specific
+thing: *nobody chose this*. Whether that is a refusal, a documented fallback, or
+a silent wrong answer is decided inside the stage body, per parameter, forever.
+
+So an omission is not automatically a defect - plenty of these are deliberate -
+but an omission that is **not** written down here is one nobody has looked at.
+That is the whole contract: this file is the list of omissions somebody has
+actually considered.
+
+**What it is NOT.** It is not permission to omit anything. Adding an entry is a
+claim that the omission is benign *and why*; removing the argument's default
+would make a stage refuse loudly instead, which is often the better fix and is
+not this file's business. Every entry below was read against the stage body, not
+inferred from its name.
+
+**How to change it.** Add the line in the same commit as whatever introduced the
+omission. `PartFour` fails on a new omission with no entry, so the obligation is
+mechanical. If you delete a call-site argument, delete the entry in the same
+commit or `PartFour` fails on a now-stale entry.
+
+**`CALL-SITE-LINE` notes.** The line numbers are where `run.py` calls the stage
+as of round 12 Phase 3. They are recorded per entry because an omission is a
+fact about a *call site*, not about a signature: the same stage called from two
+places can legitimately pass a parameter at one and not at the other.
+
+**`omissions.md` and this file are the same list.** `PartFour` derives the
+omissions from `run.py` and compares them to this file, so the two cannot
+diverge; `pa-artifacts/round12/omissions.md` states the counting rule that
+decides which of the derived set are defects and which are decisions, and names
+the six that were fixed. A parameter that appears in neither this file nor
+`omissions.md` is a defect this file exists to catch.
+---
+
+# ---------------------------------------------------------------------------
+# The entries.
+#
+# Ordered by stage, then parameter, matching `REQUIRED_PARAMETERS`. Each reason
+# was checked against the stage body at the recorded line, not inferred from the
+# parameter's name. Where the omission is NOT benign the reason says so and
+# points at the finding rather than defending the omission.
+#
+# Round 12 Phase 3 (WIRE-ALL) reduced this file from 16 entries to 5. The eleven
+# deletions were omissions that CHANGED BEHAVIOUR, and each was fixed at its call
+# site rather than re-justified here. They are named, with the fix, in
+# `omissions.md`; the six WIRE.md A3 called out are marked SIX below.
+# ---------------------------------------------------------------------------
+
+# --- stages.annotation, called at run.py:1038 -----------------------------
+
+papipeline.stages.annotation database :: benign and documented: the body falls back to _bakta_database(config) (annotation.py:919), which reads the pinned Bakta database from config/references.tsv, and its comment states the intent - "Resolved once for the cohort, not per genome." run.py deliberately does NOT forward it, because resolving it here would call _bakta_database twice per run and the stage's own comment says one resolution per cohort is the point.
+
+# --- stages.recombination, called at run.py:2152 --------------------------
+# TEST-only call site; round 11 recorded the module in TEST_ONLY_ENTRY_POINTS.
+
+papipeline.stages.recombination intermediate_root :: benign: the parameter is documented as "Unused on the TEST path" (recombination.py:318) and the body never reads it. It is not a REAL input at all, because run.py reaches stage 8's REAL path through derive_recombination_tables, never through run().
+
+papipeline.stages.recombination phylogeny_dir :: benign: the body guards it with `if phylogeny_dir is not None:` (recombination.py:405), and the TEST branch deliberately omits it so a run cannot overwrite a committed fixture.
+
+# --- stages.regulators, called at run.py:1211 ----------------------------
+
+papipeline.stages.regulators calls_by_isolate :: benign: documented as a deprecated door onto the producer (regulators.py:812). run.py passes the screen's on-disk input table instead, which is what docs/data_contract.md:114 specifies, and the body raises if both are absent.
+
+papipeline.stages.regulators reference_fasta :: benign and already recorded: the body defaults it from the config accessor, and round 11 captured this in CONFIG_DEFAULTED_ROOT_PARAMETERS.

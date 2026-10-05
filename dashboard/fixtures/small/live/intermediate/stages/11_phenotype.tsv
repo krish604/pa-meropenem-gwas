@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	antibiotic	phenotype	MIC	MIC_unit	zone_diameter	zone_unit	source
+TEST_PA_001	imipenem	R	MIC_00	mg/L	zone_diameter_00	mm	synthetic_generator
+TEST_PA_002	imipenem	S	MIC_01	mg/L	zone_diameter_01	mm	synthetic_generator
+TEST_PA_003	imipenem	S	MIC_02	mg/L	zone_diameter_02	mm	synthetic_generator
+TEST_PA_004	imipenem	S	MIC_03	mg/L	zone_diameter_03	mm	synthetic_generator
+TEST_PA_005	imipenem	R	4.6	mg/L	zone_diameter_04	mm	synthetic_generator
+TEST_PA_006	imipenem	S	MIC_05	mg/L	zone_diameter_05	mm	synthetic_generator
+TEST_PA_007	imipenem	S	MIC_06	mg/L	zone_diameter_06	mm	synthetic_generator
+TEST_PA_008	imipenem	S	MIC_07	mg/L	zone_diameter_07	mm	synthetic_generator
+TEST_PA_009	imipenem	I	2.4	mg/L	zone_diameter_08	mm	synthetic_generator
+TEST_PA_010	imipenem	S	MIC_09	mg/L	zone_diameter_09	mm	synthetic_generator

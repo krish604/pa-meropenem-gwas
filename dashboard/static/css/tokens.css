@@ -1,0 +1,222 @@
+/* tokens.css — the palette, and nothing else.
+ *
+ * §13 of DESIGN.md: "Colour values. The tokens are read from CSS custom
+ * properties; the palette itself is SHELL's, and status must be
+ * distinguishable without hue alone."
+ *
+ * Rules that hold for every other stylesheet and every component:
+ *
+ *  1. No component names a colour. It names a token. A hard-coded colour in a
+ *     component is a component that breaks in dark mode.
+ *  2. Every tone is defined for BOTH schemes below, so a tone class never
+ *     falls back to the browser default.
+ *  3. `data-theme` on <html> wins. When it is absent the OS decides, which is
+ *     why the dark block is also a `prefers-color-scheme` query rather than a
+ *     class the shell has to remember to set.
+ */
+
+:root {
+  /* -- surfaces ------------------------------------------------------- */
+  --bg: #f7f8fa;
+  --bg-raised: #ffffff;
+  --bg-sunken: #eef0f4;
+  --bg-inset: #e6e9ef;
+  --border: #d3d8e0;
+  --border-strong: #aab2bf;
+
+  /* -- text ----------------------------------------------------------- */
+  --fg: #14181f;
+  --fg-muted: #4a5260;
+  --fg-faint: #6d7686;
+
+  /* -- interaction ---------------------------------------------------- */
+  --accent: #1f5fbf;
+  --accent-fg: #ffffff;
+  --accent-soft: #e4edfb;
+  --link: #1a4f9e;
+  --focus: #0b62d6;
+
+  /* -- the six badge tones + the two honesty tones --------------------- */
+  /* `ok` completed · `busy` running · `bad` failed · `warn` refused
+   * `unknown` not_assessed / not_run.                                        */
+  --tone-ok-fg: #10562b;
+  --tone-ok-bg: #dcf3e4;
+  --tone-ok-line: #7cc79b;
+
+  --tone-busy-fg: #0a4a63;
+  --tone-busy-bg: #d8eef7;
+  --tone-busy-line: #79bed9;
+
+  --tone-bad-fg: #8a1620;
+  --tone-bad-bg: #fbe0e2;
+  --tone-bad-line: #dd9aa1;
+
+  --tone-warn-fg: #7a4a05;
+  --tone-warn-bg: #fbeed2;
+  --tone-warn-line: #d9b26a;
+
+  --tone-unknown-fg: #454c58;
+  --tone-unknown-bg: #e8eaef;
+  --tone-unknown-line: #b4bac5;
+
+  /* -- the D3 banner --------------------------------------------------- */
+  --power-fg: #6b3d00;
+  --power-bg: #fdf2d9;
+  --power-line: #d9ac52;
+  --power-glyph: #8a5000;
+
+  /* -- the mode banner (STUB / TEST provenance) ------------------------ */
+  --mode-fg: #6a2c0c;
+  --mode-bg: #fdeadd;
+  --mode-line: #dfa172;
+
+  /* -- transport indicator (§6.3) -------------------------------------- */
+  --transport-sse: #10562b;
+  --transport-poll: #7a4a05;
+  --transport-none: #8a1620;
+
+  /* -- type ------------------------------------------------------------ */
+  --font-sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-base: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.25rem;
+  --fs-xl: 1.5rem;
+  --lh-tight: 1.25;
+  --lh-base: 1.5;
+
+  /* -- space, radius, shadow ------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 12px rgb(0 0 0 / 6%);
+  --focus-ring: 0 0 0 2px var(--bg-raised), 0 0 0 4px var(--focus);
+
+  color-scheme: light;
+}
+
+/* Dark. Two ways in: an explicit `data-theme="dark"` on <html>, or the OS
+ * asking for it when the shell has not chosen. Both blocks carry the same
+ * token names, so no component can tell which one applied. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151b;
+    --bg-raised: #1a1f27;
+    --bg-sunken: #0d1015;
+    --bg-inset: #232933;
+    --border: #303845;
+    --border-strong: #4b5566;
+
+    --fg: #e6e9ef;
+    --fg-muted: #a9b2c1;
+    --fg-faint: #8a93a3;
+
+    --accent: #6ea3f5;
+    --accent-fg: #0b1017;
+    --accent-soft: #1b2739;
+    --link: #8ab6f8;
+    --focus: #7fb2fb;
+
+    --tone-ok-fg: #9fe0b8;
+    --tone-ok-bg: #12291c;
+    --tone-ok-line: #2f6b45;
+
+    --tone-busy-fg: #a6dcf2;
+    --tone-busy-bg: #0f2733;
+    --tone-busy-line: #2b6076;
+
+    --tone-bad-fg: #f5b0b6;
+    --tone-bad-bg: #2e1418;
+    --tone-bad-line: #6e2f36;
+
+    --tone-warn-fg: #f0cd90;
+    --tone-warn-bg: #2c2311;
+    --tone-warn-line: #6d562a;
+
+    --tone-unknown-fg: #b8c0cd;
+    --tone-unknown-bg: #1e232c;
+    --tone-unknown-line: #454e5d;
+
+    --power-fg: #f2d69a;
+    --power-bg: #2a2110;
+    --power-line: #6b5626;
+    --power-glyph: #ffd88a;
+
+    --mode-fg: #f5c6a0;
+    --mode-bg: #2c1d12;
+    --mode-line: #6f4a2c;
+
+    --transport-sse: #9fe0b8;
+    --transport-poll: #f0cd90;
+    --transport-none: #f5b0b6;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 30%);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #12151b;
+  --bg-raised: #1a1f27;
+  --bg-sunken: #0d1015;
+  --bg-inset: #232933;
+  --border: #303845;
+  --border-strong: #4b5566;
+
+  --fg: #e6e9ef;
+  --fg-muted: #a9b2c1;
+  --fg-faint: #8a93a3;
+
+  --accent: #6ea3f5;
+  --accent-fg: #0b1017;
+  --accent-soft: #1b2739;
+  --link: #8ab6f8;
+  --focus: #7fb2fb;
+
+  --tone-ok-fg: #9fe0b8;
+  --tone-ok-bg: #12291c;
+  --tone-ok-line: #2f6b45;
+
+  --tone-busy-fg: #a6dcf2;
+  --tone-busy-bg: #0f2733;
+  --tone-busy-line: #2b6076;
+
+  --tone-bad-fg: #f5b0b6;
+  --tone-bad-bg: #2e1418;
+  --tone-bad-line: #6e2f36;
+
+  --tone-warn-fg: #f0cd90;
+  --tone-warn-bg: #2c2311;
+  --tone-warn-line: #6d562a;
+
+  --tone-unknown-fg: #b8c0cd;
+  --tone-unknown-bg: #1e232c;
+  --tone-unknown-line: #454e5d;
+
+  --power-fg: #f2d69a;
+  --power-bg: #2a2110;
+  --power-line: #6b5626;
+  --power-glyph: #ffd88a;
+
+  --mode-fg: #f5c6a0;
+  --mode-bg: #2c1d12;
+  --mode-line: #6f4a2c;
+
+  --transport-sse: #9fe0b8;
+  --transport-poll: #f0cd90;
+  --transport-none: #f5b0b6;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 14px rgb(0 0 0 / 30%);
+
+  color-scheme: dark;
+}

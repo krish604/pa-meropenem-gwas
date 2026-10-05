@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The dashboard talks only to its own origin and is reached over an SSH
+         tunnel, so a referrer is never worth sending (UI-D4). -->
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Suppress the network's guess at a favicon: an absent icon is a 404 on
+         this origin, and a 404 in a screenshot is a defect report. The empty
+         data URI is not a request. -->
+    <link rel="icon" href="data:," />
+    <title>P. aeruginosa imipenem AMR &mdash; run dashboard</title>
+
+    <!-- UI-D4: everything is served from this origin. No CDN, no webfont, no
+         analytics, no import from a bare specifier. The eight d3 UMD builds
+         are vendored under /static/vendor/ and loaded here as plain scripts so
+         the pages can rely on the `d3` global without a bundler. -->
+    <link rel="stylesheet" href="/static/css/tokens.css" />
+    <link rel="stylesheet" href="/static/css/base.css" />
+    <link rel="stylesheet" href="/static/css/shell.css" />
+    <link rel="stylesheet" href="/static/css/components.css" />
+    <link rel="stylesheet" href="/static/css/pages.css" />
+
+    <script src="/static/vendor/d3-array.min.js"></script>
+    <script src="/static/vendor/d3-interpolate.min.js"></script>
+    <script src="/static/vendor/d3-scale.min.js"></script>
+    <script src="/static/vendor/d3-selection.min.js"></script>
+    <script src="/static/vendor/d3-axis.min.js"></script>
+    <script src="/static/vendor/d3-format.min.js"></script>
+    <script src="/static/vendor/d3-shape.min.js"></script>
+    <script src="/static/vendor/d3-zoom.min.js"></script>
+  </head>
+  <body>
+    <a class="visually-hidden" href="#page">Skip to page content</a>
+
+    <div class="app">
+      <header class="masthead">
+        <div class="masthead-row">
+          <div class="masthead-title">
+            <h1>Pseudomonas aeruginosa &mdash; imipenem AMR</h1>
+            <span class="masthead-sub">
+              Read-only run dashboard. Every number is computed server-side over
+              the whole artefact and arrives with its basis.
+            </span>
+          </div>
+
+          <!-- The header carries the transport in every case, so a screenshot
+               of the UI says which mechanism it is showing (§6.3). -->
+          <div
+            class="transport"
+            id="transport-indicator"
+            data-transport="connecting"
+            role="status"
+            aria-live="polite"
+          >
+            <span class="transport-glyph" aria-hidden="true">&#8230;</span>
+            <span class="transport-label">transport: connecting</span>
+            <span class="transport-note" id="transport-note"></span>
+          </div>
+
+          <div class="masthead-controls">
+            <button
+              type="button"
+              id="theme-toggle"
+              class="ghost"
+              title="Light or dark. Applies for this session only; nothing is written to this browser (UI-D1)."
+            >
+              theme: follow system
+            </button>
+          </div>
+        </div>
+
+        <div class="masthead-row">
+          <dl class="masthead-facts" id="run-facts"></dl>
+        </div>
+      </header>
+
+      <nav class="nav" aria-label="Pages">
+        <ul class="nav-list" id="nav-list"></ul>
+      </nav>
+
+      <main class="main" id="page" tabindex="-1">
+        <!-- The shell replaces this. It is not a spinner: a page that never
+             mounts says why, in words. -->
+        <div class="message" data-severity="info">
+          <h3>Starting</h3>
+          <p>Reading <code>/api/health</code> to learn which results root is open.</p>
+        </div>
+      </main>
+
+      <footer class="footer">
+        <p>
+          Read-only over the results root (UI-D1). No file under the opened root
+          is created, truncated or renamed; the state directory outside it is
+          the only write location.
+        </p>
+      </footer>
+    </div>
+
+    <!-- The boot flag. `app.js` starts the shell only when it sees this, so a
+         page module may `import` the shell's helpers without starting a
+         second one. It is set and cleared synchronously, before the module
+         below is fetched. -->
+    <script>
+      window.__PA_DASHBOARD_BOOT__ = true;
+    </script>
+    <script type="module" src="/static/app.js"></script>
+    <noscript>
+      <p class="message" data-severity="warn">
+        This dashboard is a client-side application: every view is built in the
+        browser from the API. With JavaScript disabled it cannot render a
+        stage&rsquo;s state honestly, so it shows nothing rather than a blank
+        grid.
+      </p>
+    </noscript>
+  </body>
+</html>

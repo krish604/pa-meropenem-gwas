@@ -1,0 +1,12 @@
+sample_id	antibiotic	determinant	gene	variant	determinant_type	mechanism	evidence_source	database	database_version	confidence	claim_status	identity_pct	coverage_pct
+A1	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+A2	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+A3	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+B1	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+B2	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+B3	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+C1	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+C2	imipenem	blaOXA-1	blaOXA-1	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.0	100.0
+B1	imipenem	fosA	fosA	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.5	100.0
+B2	imipenem	fosA	fosA	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.5	100.0
+B3	imipenem	fosA	fosA	.	AMR	.	amrfinderplus	AMRFinderPlus	2026-08-07.1	.	DETECTED	99.5	100.0

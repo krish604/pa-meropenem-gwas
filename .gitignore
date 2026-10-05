@@ -1,0 +1,189 @@
+# --- real dataset: never commit -------------------------------------------
+# The 835 downloaded assemblies and their metadata are inputs, not source.
+# They stay on disk; this repository tracks code and configuration only.
+#
+# NOTE: no trailing slash, deliberately. A `data/` pattern with the trailing
+# slash matches DIRECTORIES ONLY, so it does not match a symlink named `data`
+# -- git classifies a symlink as a non-directory blob-like entry. Worktrees
+# share one real dataset by symlinking `data` in, and with the slash those
+# symlinks showed up as untracked noise (`?? data`) and were one `git add`
+# away from being committed. Dropping the slash matches the symlink too, which
+# is the actual intent: the link and the data it points at both stay untracked.
+data
+# The bounded REAL smoke run's isolate list -- the target of
+# `cohort.subset_file` in config/science.yaml. It lives in `local/`, NOT under
+# `data/`, for two reasons.
+#
+# 1. `data` is an UNTRACKED SYMLINK into the canonical worktree, and git refuses
+#    to descend through a symlink, so no ignore rule under `data/` can be
+#    verified with `git check-ignore`:
+#      $ git check-ignore -q data/smoke_isolates.txt ; echo $?
+#      fatal: pathspec 'data/smoke_isolates.txt' is beyond a symbolic link
+#      128
+#    An ignore rule nobody can check is an ignore rule nobody has checked.
+#    `local/` is a REAL directory in every worktree, so its rule is checkable:
+#      $ git check-ignore -v local/smoke_isolates.txt
+# 2. Writing through the `data` symlink would write into the read-only canonical
+#    worktree, which is exactly what that symlink exists to avoid.
+#
+# NO TRAILING SLASH, deliberately, matching the `data` and `db` rules above: a
+# trailing slash matches directories only, which would leave the files inside
+# visible to `git status`. The list is an INPUT nobody regenerates, so a mistaken
+# add would not surface in any later diff.
+local
+*.fna
+*.fasta
+*.fa
+*.fsa
+assembly_data_report.jsonl
+dataset_catalog.json
+all_*.zip
+dehydrated_download.log
+nohup.out
+fetch.txt
+PDC_*.tsv
+PDC_*.txt
+.~lock.*
+
+# --- generated outputs ------------------------------------------------------
+results/*
+!results/.gitkeep
+reports/*
+!reports/.gitkeep
+versions_*.txt
+
+# The live run-status log. The dashboard replays this file, so it is a large
+# per-run artefact, not source. Regenerated on every run.
+#
+# Anchored to the repository root on purpose. Unanchored, `status/` also matched
+# `dashboard/fixtures/small/bundle/04_run_info/status/`, which is a committed
+# fixture, not a runtime artefact -- so git silently dropped the whole
+# `04_run_info/` directory and `test_bundle_has_the_assumed_layout` failed at
+# be539a6, before any of this work. A fixture must be trackable; a run log must
+# not. Only the root-level one is runtime output.
+/status/
+
+# --- reference databases: provisioned out-of-band, never committed ----------
+# AMRFinderPlus, VFDB, MLST, Panaroo, Bakta and the PAO1 reference all land
+# here. They are multi-gigabyte, machine-specific, and pinned by accession and
+# checksum in config/references.tsv rather than by content in git. Note that a
+# bare `db/` was previously caught only incidentally by the `*.fasta` glob
+# above; real database directories contain `db.md5`, `version.txt` and
+# `latest`, which that glob does not match. As with `data` above, the trailing
+# slash is omitted so that a symlinked `db` is matched too.
+db
+databases/
+# The committed synthetic fixtures live in test_data/, but the genome FASTA
+# directory is symlinked in from the real dataset. Same reasoning as `data`:
+# no trailing slash, so the symlink itself is ignored.
+test_data/genomes
+
+# --- secrets ----------------------------------------------------------------
+# Nothing in this repository is a secret store, but credential-shaped files
+# must never enter git even by accident.
+.env
+.env.*
+!.env.example
+
+# The synthetic fixtures ARE committed: they are inputs to the test suite and
+# must be byte-stable for assertions to mean anything. See
+# docs/reproducibility.md ("Determinism").
+#
+# The `*.fasta` / `*.fna` globs above exist to keep the REAL dataset out, but
+# they are path-blind and so also swallowed the synthetic alignments in
+# `test_data/phylogeny/`. Those two files are generator output
+# (`papipeline.testing.synthetic.write_alignments`, seeded, byte-stable) and
+# tests read them from `test_data/phylogeny/`, so the suite was red in any
+# worktree that lacked a stray on-disk copy. Un-ignore them here, which is what
+# the comment above always intended. `test_data/genomes` stays ignored via the
+# `test_data/genomes` rule above; this does not re-admit it.
+!test_data/phylogeny/*.fasta
+# `test_data/intermediate/gubbins/recombination.filtered_polymorphic_sites.fasta`
+# is the same kind of committed fixture: stage 8's TEST input, produced by the
+# deterministic generator in
+# pa-artifacts/round11/dag/make_test_gubbins_fixture.py. Without this the TEST
+# DAG has no input for stage 8 in a fresh worktree, which is the "stray on-disk
+# copy" failure the rule above already documents for the phylogeny alignments.
+!test_data/intermediate/gubbins/*.fasta
+
+# --- python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.venv/
+venv/
+
+# --- workflow ---------------------------------------------------------------
+.snakemake/
+.snakemake_log/
+dag.png
+dag.dot
+*.dag
+
+# --- editors / OS -----------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- pilot-100 intermediates ----------------------------------------------
+# Per-genome AMRFinderPlus reports are large regenerable intermediates.
+# They are reused across runs, so they are ignored by git but kept on disk.
+results/pilot100/amrfinder/
+
+# --- locally built tools ----------------------------------------------------
+# A compiled binary is a build artifact, never a source file. Regenerate with
+# scripts/build_gubbins_from_source.sh (pinned to gubbins v3.4.3); it asserts its
+# own test suite passes and verifies the zlib linkage before installing.
+tools/
+
+# --- agent artefacts: never published ----------------------------------------
+# Round reports, storage surveys, run bundles and the dashboard's own design docs.
+# These are working notes about this repository, not part of the pipeline: they
+# name local absolute paths, quote intermediate counts, and grow without bound.
+# `pa-artifacts/ui/*.md` arrived with the ui-dashboard merge (be539a6) and was
+# untracked at publish time rather than deleted from disk. The dashboard's real
+# documentation lives in docs/.
+pa-artifacts/
+pa-backups/
+
+# --- dashboard runtime ------------------------------------------------------
+# The dashboard binds to 127.0.0.1 only and writes nothing outside its state dir,
+# but a local run leaves these behind.
+dashboard/.state/
+dashboard/**/node_modules/
+
+# --- large regenerable bioinformatics outputs --------------------------------
+# Aligned reads, called variants and protein/gene FASTAs are inputs to a stage or
+# products of one. They are gigabytes, they are reproducible, and no reader needs
+# them in the history. The committed synthetic fixtures under test_data/ are
+# un-ignored explicitly above (`!test_data/variants/*.vcf` and friends), so this
+# does not untrack the test suite.
+*.bam
+*.bai
+*.vcf
+*.vcf.gz
+*.bcf
+*.cram
+*.sam
+*.faa
+bakta/
+bakta_db/
+
+# --- logs and scratch -------------------------------------------------------
+logs/
+*.log
+
+# --- javascript -------------------------------------------------------------
+node_modules/

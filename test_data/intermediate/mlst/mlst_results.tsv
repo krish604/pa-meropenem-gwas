@@ -1,0 +1,23 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+sample_id	ST	alleles	MLST_status	mlst_scheme	allele_database
+TEST_PA_001	2	abcZ:7;adk:9;aroE:11;guaA:13;gyrB:15;ircD:17;toxA:19	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_002	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_003	7	abcZ:22;adk:29;aroE:36;guaA:3;gyrB:10;ircD:17;toxA:24	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_004	2	abcZ:7;adk:9;aroE:11;guaA:13;gyrB:15;ircD:17;toxA:19	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_005	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_006	2	abcZ:7;adk:9;aroE:11;guaA:13;gyrB:15;ircD:17;toxA:19	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_007	NA	abcZ:34;adk:5;aroE:16;guaA:27	partial	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_008	5	abcZ:16;adk:21;aroE:26;guaA:31;gyrB:36;ircD:1;toxA:6	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_009	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_010	7	abcZ:22;adk:29;aroE:36;guaA:3;gyrB:10;ircD:17;toxA:24	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_011	12	abcZ:37;adk:9;aroE:21;guaA:33;gyrB:5;ircD:17;toxA:29	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_012	8	abcZ:25;adk:33;aroE:1;guaA:9;gyrB:17;ircD:25;toxA:33	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_013	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_014	NA	abcZ:31;adk:1;aroE:11;guaA:21	partial	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_015	10	abcZ:31;adk:1;aroE:11;guaA:21;gyrB:31;ircD:1;toxA:11	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_016	11	abcZ:34;adk:5;aroE:16;guaA:27;gyrB:38;ircD:9;toxA:20	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_017	7	abcZ:22;adk:29;aroE:36;guaA:3;gyrB:10;ircD:17;toxA:24	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_018	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_019	4	abcZ:13;adk:17;aroE:21;guaA:25;gyrB:29;ircD:33;toxA:37	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_020	12	abcZ:37;adk:9;aroE:21;guaA:33;gyrB:5;ircD:17;toxA:29	typed	pseudomonas_aeruginosa	synthetic_scheme_v0

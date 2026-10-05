@@ -1,0 +1,10 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+sample_id	contig_id	gene_id	gene_name	product	gene_type	start	end	strand	annotation_source
+TEST_PA_017	TEST_PA_017_contig1	TEST_PA_017_g001	oprD	outer membrane protein D	porin	400	1723	+	synthetic_generator
+TEST_PA_017	TEST_PA_017_contig1	TEST_PA_017_g002	mexR	transcriptional regulator MexR	regulator	200	941	-	synthetic_generator
+TEST_PA_017	TEST_PA_017_contig1	TEST_PA_017_g003	mexZ	transcriptional regulator MexZ	regulator	100	1153	+	synthetic_generator
+TEST_PA_017	TEST_PA_017_contig1	TEST_PA_017_g004	nfxB	transcriptional regulator NfxB	regulator	300	1596	-	synthetic_generator
+TEST_PA_017	TEST_PA_017_contig1	TEST_PA_017_g005	ampD	D-alanyl-D-alanine carboxypeptidase AmpD	enzyme	50	485	+	synthetic_generator
+TEST_PA_017	TEST_PA_017_contig1	TEST_PA_017_g006	dacB	D-alanyl-D-alanine carboxypeptidase DacB	enzyme	100	1063	-	synthetic_generator
+TEST_PA_017	TEST_PA_017_contig2	TEST_PA_017_g900	blaVIM-1	synthetic determinant blaVIM-1	acquired	100	900	+	synthetic_generator

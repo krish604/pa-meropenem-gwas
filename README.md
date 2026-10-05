@@ -1,0 +1,329 @@
+# Pseudomonas aeruginosa Imipenem AMR Pipeline
+
+An assembly-based *Pseudomonas aeruginosa* antimicrobial resistance analysis
+pipeline focused on **imipenem**, built to be extended to other antibiotics
+through configuration alone. A read-only monitoring **dashboard** lives in
+[`dashboard/`](dashboard/).
+
+> **STATUS: WORK IN PROGRESS. Not a complete 16-stage result.**
+>
+> All 16 stages are implemented. They are exercised against **synthetic fixtures**
+> in `test_data/`, and a REAL run has been done on a **10-isolate smoke subset**.
+> That run reached **stage 6 only**. Stages 7–16 have never run on real data.
+>
+> **n = 10 is grossly underpowered. Nothing this repository produces is a finding
+> about imipenem susceptibility in *P. aeruginosa*.** See
+> [`docs/STATUS.md`](docs/STATUS.md).
+
+## What has actually run on real data
+
+REAL-mode run, 10 isolates, `snakemake full_run`, one stage each:
+
+| Stage | Outcome on real data |
+|---|---|
+| 1 genome validation | **ran** — 10/10 assemblies pass |
+| 2 genome annotation | **ran** — 10/10 imported from verified Bakta output, **Bakta never executed** |
+| 3 MLST | **ran** — 10/10 typed (*paeruginosa*) |
+| 4 AMR detection | **ran** — 199 determinant rows, AMRFinderPlus 4.2.7 |
+| 4a structural variants | **ran** — 409 candidate calls, labelled `candidate:` |
+| 5 virulence | **ran** — VFDB 4573 factors |
+| 6 variants + regulator screen | **ran** — 509,612 alleles; 100 locus-coverage values measured |
+| 6a cohort variants | **ran** — 73,752 sites |
+| 7 pangenome | **refused** — `panaroo` not importable and `cd-hit` not on `PATH` |
+| 8 recombination | **not run** — `gubbins` cannot run on this platform |
+| 9–16 phylogeny → report | **not run** — downstream of stages 7 and 8 |
+
+Stages 7 and 8 are blocked by the platform, not by the code: `gubbins` has no
+usable macOS arm64 build (see [`docs/environment-arm64.md`](docs/environment-arm64.md)
+§3 — every build is Python-3.10-only and the shipped ones crash with SIGSEGV),
+and stages 9–16 consume stage 8. Running all 16 needs a Linux/conda machine.
+
+## Known issues in the current results
+
+1. **`variants.tsv` holds 9 of 10 isolates.** One isolate's `bcftools mpileup`
+   was SIGKILLed (`returncode=-9`) and produced no calls. The pipeline keeps it
+   as a cohort member and says so, which is the defensible choice — but any
+   variant-based statistic computed from these tables has **n = 9, not 10**. The
+   OOM cause is **unproven**; it was not reproduced.
+2. **`max_depth` is 250 and was deliberately not lowered.** It is the only lever
+   that bounds mpileup RSS, but it subsamples reads, so lowering it moves
+   `DP`/`AD`. That is a science decision and it is still **pending**. Output size
+   was bounded instead (`-O z`), which shrank one call from 69,488,493 bytes to
+   1,861,798 with a byte-identical variant set.
+3. **Four reporting fixes are specified but not implemented** — carrying
+   `call_status` beside the cohort denominator, among others. See `BACKLOG.md`
+   in the round-12 artefacts.
+4. **Tool versions are mostly `UNKNOWN` in the manifest** by design: probing is
+   on-demand so the pipeline never executes a tool it does not need.
+
+## Inputs that are NOT in this repository
+
+Nothing here is clinical data. Supply it yourself, out of band:
+
+| Input | What it is | Where it goes |
+|---|---|---|
+| `PDC_essential.tsv` | the PDC essential-genes table | worktree root; real clinical data, never committed |
+| `data/` | genome assemblies (`GCA_*` / `PDT_*` FASTA) | `data/` |
+| `db/` | AMRFinderPlus, VFDB, MLST, Bakta (`db-light`), PAO1 reference | `db/` |
+| Bakta annotation | per-isolate `bakta` output trees | `results/<mode>/intermediate/bakta/<sample_id>` |
+
+**Bakta is an INPUT to this pipeline and is never re-run.** Stage 2 imports
+existing `bakta` output under `annotation.reuse_tool_output: require`, which
+refuses loudly rather than executing the tool when curated output is missing.
+Three guards enforce this in a REAL run: the config mode, executable tripwire
+shims on `PATH`, and a background process watcher.
+
+## License
+
+**License: not yet chosen.** No license file is committed. Until one is, treat
+the code as all rights reserved and do not redistribute it.
+
+## Quick start
+
+```bash
+# 1. environment (optional for TEST mode; the core deps are already common)
+micromamba env create -f environment/environment.yml
+micromamba activate pa-amr
+
+# 2. run the test suite
+python3 -m pytest tests -q
+
+# 3. run the pipeline against synthetic fixtures
+python3 scripts/common/run_pipeline.py --mode TEST
+
+# 4. see what it would do, without running anything
+python3 scripts/common/run_pipeline.py --mode TEST --dry-run
+
+# 5. run one stage
+python3 scripts/common/run_stage.py --mode TEST --stage amr
+```
+
+The run writes:
+
+- `results/test/intermediate/stages/*.tsv` — the 16 stage outputs
+- `results/test/run_manifest.json` — tool, version and database provenance
+- `reports/test_pipeline_report.md` / `.html` — the test report
+
+## Try to analyse real data
+
+`REAL` mode is gated by `runtime.allow_real_mode` and requires an explicit opt-in,
+so it is refused by default:
+
+```console
+$ python3 scripts/common/run_pipeline.py --mode REAL
+ERROR: REAL mode is disabled: runtime.allow_real_mode is false in config.yaml.
+       REAL mode is enabled only for the separate analysis phase, after this
+       pipeline skeleton has been reviewed.
+```
+
+With a machine overlay that sets it, and with the inputs supplied, the production
+path is Snakemake:
+
+```bash
+PIPELINE_ALLOW_REAL_MODE=1 snakemake --snakefile workflow/Snakefile \
+  --config mode=REAL machine=config/machines/smoke.yaml --cores 4 full_run
+```
+
+Each stage runs exactly once. The laptop config refuses more than 20 samples.
+
+## What it does
+
+```
+QC / sample metadata
+      ↓
+ 1  Genome validation          assembly metrics, QC thresholds, tool hooks
+ 2  Genome annotation          Bakta parser → standardised records
+ 3  MLST                       sequence type + allele profile
+ 4  AMR detection              AMRFinderPlus adapter, CARD optional
+ 6  Regulator screen           oprD, mexR, nalC/D, mexZ, nfxB, mexT/S, ampD/R, dacB
+ 7  SV / MGE                   confirmed / candidate / not_assessable
+ 5  Mechanism interpretation   permeability, efflux, AmpC, acquired
+ 8  Virulence                  VFDB, independent of AMR
+ 9  Pan-genome                  core / accessory partition
+10  Phylogenomics               core alignment → SNPs → tree
+11  Phenotype interface        R / I / S / SDD / ND
+12  GWAS                       pyseer adapter, BH correction
+13  Convergence                independent lineages, not sample counts
+14  Co-occurrence              association statistics only
+15  Integration                the master genotype–mechanism–phenotype table
+16  Figures + report           13 data-driven figure tables
+```
+
+Stages are numbered as in the specification and **executed** in dependency
+order: stage 5 consumes stages 6 and 7.
+
+## The one thing to understand
+
+The pipeline distinguishes five claim levels and never exceeds what the
+evidence supports:
+
+| Status | Meaning |
+|---|---|
+| `DETECTED` | directly observed in this sample |
+| `PREDICTED` | inferred without direct observation |
+| `ASSOCIATED` | statistically associated in this cohort |
+| `SUPPORTED` | associated **and** robust across lineages |
+| `UNKNOWN` | nothing to report |
+
+There is no `CAUSAL` level — not because it is discouraged, but because it
+cannot be expressed in the output schema.
+
+Concretely, and enforced in code:
+
+- A detected `oprD` gene means an **intact locus**, not susceptibility. Only
+  disruption or absence carries `reduced_permeability`.
+- A resistant sample can have no detected determinant, and a susceptible sample
+  can have one. The synthetic fixture is built to keep this true.
+- A feature carried by one lineage is **lineage-linked**, not a resistance
+  association, however small its p-value.
+- A candidate structural variant is `PREDICTED` and labelled `candidate:` in the
+  master table. It is never promoted to confirmed.
+- `R`/`I`/`S` never acquire an MIC or a zone diameter.
+- Missing values stay missing.
+
+The ten rules and the code and tests that enforce each are in
+[`docs/scientific_rules.md`](docs/scientific_rules.md).
+
+## Layout
+
+```
+config/          config.yaml + 4 editable knowledge tables
+  config.yaml              organism, antibiotics, thresholds, switches
+  antibiotics.tsv          antibiotic classes and phenotype standards
+  mechanisms.tsv           gene → mechanism, with a claim ceiling per gene
+  regulators.tsv           loci screened by stage 6
+  references.tsv           pinned tool and database versions
+data/            REAL inputs (835 GCA_* assemblies, untouched by this build)
+test_data/       TEST fixtures: 20 synthetic TEST_PA_* samples
+workflow/        Snakefile — thin wrapper over the same stage functions
+scripts/         16 per-stage CLI wrappers + 4 shared entry points
+papipeline/      the library: all scientific logic
+results/         run outputs, per mode
+reports/         generated reports
+tests/           498 tests
+environment/     environment.yml + versions.sh
+docs/            architecture, data contract, scientific rules, reproducibility
+```
+
+## Configuration-driven
+
+Three files, no code:
+
+| To change | Edit |
+|---|---|
+| The antibiotic analysed | `config.yaml` `antibiotics:`, `antibiotics.tsv` |
+| A resistance locus | `mechanisms.tsv`, `regulators.tsv` |
+| A QC threshold | `config.yaml` `qc:` |
+| Whether a stage runs | `config.yaml` `analysis:` |
+| A tool or database version | `references.tsv` |
+
+Adding meropenem is three edits: name it in `config.yaml`, add a row to
+`antibiotics.tsv`, and extend the `antibiotic` column of the relevant
+`mechanisms.tsv` rows (it accepts a comma-separated list, or `all`).
+
+## External tools
+
+None are needed for TEST mode. The pipeline detects what is present and
+refuses a stage whose tool is missing rather than degrading silently. A tool
+that is present but not needed is **not executed** to discover its version.
+
+| Stage | Tool | osx-arm64 laptop | Notes |
+|---|---|---|---|
+| 1 validate | `seqkit` | yes | native arm64 build |
+| 2 annotation | `bakta` | **input only** | never re-run; curated output is imported |
+| 3 MLST | `mlst` | yes | |
+| 4 AMR | `ncbi-amrfinderplus` 4.2.7 | yes | native arm64 build |
+| 4a SV | `nucmer` | yes | candidate calls only |
+| 5 virulence | `blast` 2.17.0 | yes | native arm64 build |
+| 6 variants | `minimap2` 2.31, `bcftools` 1.23.1 | yes | native arm64 builds |
+| 7 pangenome | `panaroo` + `cd-hit` | **no** | pip-only install; not present in the run env |
+| 8 recombination | `gubbins` | **no** | no usable arm64 build — see environment-arm64.md §3 |
+| 9 phylogeny | `snp-sites`, `iqtree` | yes | native arm64 builds |
+| 12 GWAS | `pyseer` 1.1.2 | limited | opt-in suite; 20 tests skip unless enabled |
+| — | `snakemake` | yes | the production path for REAL runs |
+
+`bash environment/versions.sh` prints the current status. Per-tool evidence is in
+[`docs/environment-arm64.md`](docs/environment-arm64.md).
+
+## Tests
+
+```bash
+python3 -m pytest tests dashboard/tests -q   # 3502 tests
+python3 -m pytest tests/unit -q             # parsers and stage logic
+python3 -m pytest tests/integration -q      # config, full run, mode gating
+python3 -m pytest dashboard/tests -q        # dashboard server and sources
+```
+
+Latest full run: **3434 passed, 68 skipped, 0 failed**.
+
+The 68 skips are not all environmental, and pretending otherwise would be
+misleading: 21 are the real clinical file (`PDC_essential.tsv`, absent by
+design), 10 are `gubbins`, 20 are an opt-in `pyseer` suite
+(`PAPIPELINE_TEST_PYSEER=1` enables it), and 12 are empty-parametrize tests that
+assert nothing in a default run.
+
+They cover the parsers (FASTA, metadata, annotation, MLST, AMR, mutations),
+sample-ID validation, mechanism mapping, phenotype validation, GWAS input
+construction, tree/sample matching, integration and figure data preparation —
+and the failure modes: missing values, duplicate sample IDs, invalid
+phenotypes, unknown genes, unknown mechanisms, missing/duplicate tree samples,
+invalid antibiotics and malformed TSV.
+
+Three bugs the tests caught during the build, for the record:
+
+1. `stages/cooccurrence.py` indexed feature sets by dict key instead of
+   checking whether a sample carried the feature, so **every pair looked
+   perfectly co-occurring**.
+2. `viz.gene_by_phenotype_table` passed a gene→samples map where
+   sample→genes was expected, so **figures 4 and 5 were all zeros**.
+3. `stages/phylogeny._parse_label` absorbed stray characters into tip names,
+   turning a malformed tree into a misleading "sample missing" error.
+
+## Adding an antibiotic
+
+See [`docs/architecture.md`](docs/architecture.md#adding-an-antibiotic). No
+code change. Tests `test_enabling_meropenem_requires_no_code_change` and
+`test_all_keyword_covers_any_antibiotic` cover the path.
+
+## Reading the output
+
+Start with the **master table** (`15_master_table.tsv`), one row per sample.
+Its `confidence` column is derived, not inherited, and its `evidence_notes`
+column states what was observed and what was not concluded.
+
+`docs/data_contract.md` documents every column and every file.
+
+## Not done yet
+
+Honest list. Round 12 closed items 1, 2, 3, 6 and 7 below; what remains is here
+with the reason.
+
+1. **Stages 7–16 have never run on real data.** Platform-blocked: `panaroo` +
+   `cd-hit` are not in the run environment, and `gubbins` has no usable macOS
+   arm64 build. Needs a Linux/conda machine.
+2. **The GWAS reference engine has no kinship correction.** It is a
+   mechanics-testing stand-in for pyseer, and says so on every result row.
+   `pyseer` 1.1.2 is available but only its opt-in suite is exercised.
+3. **No plotting layer.** All 13 figures have prepared, tested data tables
+   written as JSON; the drawing layer is not implemented.
+4. **`max_depth` is unreviewed.** 250 is inherited, not chosen; the decision to
+   lower it is pending (see Known issues).
+5. **`run_manifest.json` is not written when a run fails before the manifest
+   step.** Stage status is then only in the per-stage log.
+6. **Promoter-region assessment is disabled** pending a pinned reference.
+7. **Tool provenance is thin.** `tools_detected` is mostly `UNKNOWN` by design;
+   `config/references.tsv` is the only place versions live and it is largely
+   unpinned.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/STATUS.md`](docs/STATUS.md) | what has actually run on real data, and what has not |
+| [`docs/INSTALL.md`](docs/INSTALL.md) | install on macOS arm64 or Linux, and the platform limits |
+| [`docs/architecture.md`](docs/architecture.md) | layering, stage order, extension points, limitations |
+| [`docs/data_contract.md`](docs/data_contract.md) | every file, column and validation rule |
+| [`docs/scientific_rules.md`](docs/scientific_rules.md) | the 10 rules, the code enforcing each, the tests |
+| [`docs/reproducibility.md`](docs/reproducibility.md) | environment, provenance, determinism, gaps |
+| [`docs/environment-arm64.md`](docs/environment-arm64.md) | per-tool availability, and why `gubbins` cannot run on arm64 |
+| [`dashboard/README.md`](dashboard/README.md) | the monitoring dashboard |

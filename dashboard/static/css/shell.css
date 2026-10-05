@@ -1,0 +1,226 @@
+/* shell.css — the app frame: header, nav, transport indicator, page slot. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.masthead {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.masthead-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  max-width: 110rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.masthead-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.masthead-title h1 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.masthead-title .masthead-sub {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+
+.masthead-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+
+.masthead-facts b {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.masthead-facts .fact-unknown {
+  color: var(--tone-unknown-fg);
+  font-style: italic;
+}
+
+.masthead-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------- transport indicator */
+
+.transport {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg-raised);
+}
+
+.transport .transport-glyph {
+  font-weight: 700;
+}
+
+.transport[data-transport="sse"] {
+  color: var(--transport-sse);
+  border-color: var(--tone-ok-line);
+}
+.transport[data-transport="poll"] {
+  color: var(--transport-poll);
+  border-color: var(--tone-warn-line);
+}
+.transport[data-transport="none"] {
+  color: var(--transport-none);
+  border-color: var(--tone-bad-line);
+}
+.transport[data-transport="connecting"],
+.transport[data-transport="idle"] {
+  color: var(--fg-muted);
+}
+
+.transport-note {
+  color: var(--fg-faint);
+}
+
+/* ------------------------------------------------------------------- nav */
+
+.nav {
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  max-width: 110rem;
+}
+
+.nav-item {
+  margin: 0;
+}
+
+.nav-link {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  color: var(--fg);
+  background: var(--bg-sunken);
+}
+
+.nav-link[aria-current="page"] {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* A page whose module another owner has not written yet. Not hidden: an
+ * absent nav item reads as "this dashboard does not have that page". */
+.nav-link[data-availability="pending"] {
+  color: var(--fg-faint);
+  border-bottom-style: dotted;
+}
+
+.nav-group-label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+  align-self: center;
+  padding: 0 var(--space-2);
+}
+
+/* ------------------------------------------------------------ page slot */
+
+.main {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 110rem;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-bottom: var(--space-4);
+}
+
+.page-head-text {
+  margin-right: auto;
+  min-width: 0;
+}
+
+.page-head h2 {
+  margin-bottom: var(--space-1);
+}
+
+.page-head .page-note {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  max-width: 70ch;
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.footer {
+  border-top: 1px solid var(--border);
+  padding: var(--space-3) var(--space-4);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  max-width: 110rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* A page module was reached but its script has not been written yet. D2
+ * behaviour, not a placeholder: the absence is named, not left blank. */
+.pending-module {
+  border: 1px dashed var(--tone-unknown-line);
+  background: var(--tone-unknown-bg);
+  color: var(--tone-unknown-fg);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.pending-module h3 {
+  color: var(--tone-unknown-fg);
+}

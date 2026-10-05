@@ -1,0 +1,410 @@
+/* components.css — badges, the D3 banner, panels, and the honesty states. */
+
+/* ---------------------------------------------------------------- badge */
+
+.badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0 var(--space-2);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.badge-glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.badge-label {
+  font-weight: 600;
+}
+
+/* The tone is carried by a colour AND a glyph AND a word. Removing the colour
+ * must not remove the meaning, so `data-tone` alone never says anything. */
+.badge[data-tone="ok"] {
+  color: var(--tone-ok-fg);
+  background: var(--tone-ok-bg);
+  border-color: var(--tone-ok-line);
+}
+.badge[data-tone="busy"] {
+  color: var(--tone-busy-fg);
+  background: var(--tone-busy-bg);
+  border-color: var(--tone-busy-line);
+}
+.badge[data-tone="bad"] {
+  color: var(--tone-bad-fg);
+  background: var(--tone-bad-bg);
+  border-color: var(--tone-bad-line);
+}
+.badge[data-tone="warn"] {
+  color: var(--tone-warn-fg);
+  background: var(--tone-warn-bg);
+  border-color: var(--tone-warn-line);
+}
+.badge[data-tone="unknown"] {
+  color: var(--tone-unknown-fg);
+  background: var(--tone-unknown-bg);
+  border-color: var(--tone-unknown-line);
+}
+
+.badge-reason {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+/* An absent value. Never a blank cell, never 0, never an empty string: the
+ * label is the word `not produced` / `not reported` / `timings not recorded`
+ * and the reason follows it. */
+.absent {
+  color: var(--tone-unknown-fg);
+  font-style: italic;
+}
+
+.absent::before {
+  content: "∅ ";
+  font-style: normal;
+  font-family: var(--font-mono);
+}
+
+.badge[data-tone="unknown"] + .badge-reason::before {
+  content: "— ";
+}
+
+/* ------------------------------------------------------------ D3 banner */
+
+.power-banner {
+  border: 1px solid var(--power-line);
+  border-left-width: 4px;
+  background: var(--power-bg);
+  color: var(--power-fg);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+}
+
+.power-banner .power-flag {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--power-glyph);
+}
+
+.power-banner .power-meaning {
+  display: block;
+  margin-top: var(--space-1);
+}
+
+.power-banner[data-underpowered="false"] {
+  border-color: var(--border);
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+}
+
+.power-banner[data-underpowered="false"] .power-flag {
+  color: var(--fg-muted);
+}
+
+/* The mode banner (STUB / TEST provenance) — the run's own sentence. */
+.mode-banner {
+  border: 1px solid var(--mode-line);
+  background: var(--mode-bg);
+  color: var(--mode-fg);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+}
+
+/* ---------------------------------------------------------------- panel */
+
+.panel {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.panel > h3:first-child,
+.panel > h4:first-child {
+  margin-top: 0;
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin-bottom: var(--space-3);
+}
+
+.panel-head h3,
+.panel-head h4 {
+  margin: 0;
+  margin-right: auto;
+}
+
+.panel-note {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  max-width: 78ch;
+}
+
+.panel-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(26rem, 100%), 1fr));
+  align-items: start;
+}
+
+.split-2 {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 70rem) {
+  .split-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------- messages */
+
+.message {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  padding: var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+.message h3,
+.message h4 {
+  margin-top: 0;
+}
+
+.message[data-severity="error"] {
+  border-left-color: var(--tone-bad-line);
+  background: var(--tone-bad-bg);
+  color: var(--tone-bad-fg);
+}
+
+.message[data-severity="warn"] {
+  border-left-color: var(--tone-warn-line);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+}
+
+.message[data-severity="info"] {
+  border-left-color: var(--tone-busy-line);
+  background: var(--tone-busy-bg);
+  color: var(--tone-busy-fg);
+}
+
+.message pre,
+.message code {
+  background: var(--bg-raised);
+}
+
+/* The verbatim server sentence. Rendered as text, never as markup: a report
+ * or a probe message is data, and data does not become DOM. */
+.server-message {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  white-space: pre-wrap;
+  max-height: 30rem;
+}
+
+/* ------------------------------------------------------- probe listing */
+
+.probe-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--fs-xs);
+}
+
+.probe-list li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.probe-list li:last-child {
+  border-bottom: 0;
+}
+
+.probe-n {
+  font-family: var(--font-mono);
+  color: var(--fg-faint);
+}
+
+.probe-ok {
+  color: var(--tone-ok-fg);
+  font-weight: 600;
+}
+
+.probe-miss {
+  color: var(--tone-unknown-fg);
+}
+
+.probe-path {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  color: var(--fg-muted);
+}
+
+/* --------------------------------------------------------------- tables */
+
+.table-wrap {
+  overflow: auto;
+  max-height: 34rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.table-wrap table {
+  font-size: var(--fs-xs);
+}
+
+.table-wrap td {
+  font-family: var(--font-mono);
+  max-width: 32rem;
+  overflow-wrap: anywhere;
+}
+
+.table-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  margin-bottom: var(--space-2);
+}
+
+/* -------------------------------------------------------------- log tail */
+
+.log-tail {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-2);
+  max-height: 24rem;
+  overflow: auto;
+  margin: 0;
+  white-space: pre;
+}
+
+.log-line {
+  display: block;
+  padding: 0 var(--space-1);
+  border-left: 3px solid transparent;
+}
+
+.log-line[data-event="start"] {
+  border-left-color: var(--tone-busy-line);
+}
+.log-line[data-event="done"] {
+  border-left-color: var(--tone-ok-line);
+}
+.log-line[data-event="fail"] {
+  border-left-color: var(--tone-bad-line);
+}
+
+.log-line .log-time {
+  color: var(--fg-faint);
+}
+
+.log-line .log-event {
+  font-weight: 700;
+}
+
+/* ----------------------------------------------------------- key/values */
+
+.kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--fs-sm);
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--fg-muted);
+}
+
+.kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- chips */
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 0 var(--space-2);
+  font-size: var(--fs-xs);
+  background: var(--bg-raised);
+}
+
+.chip[data-flag="true"] {
+  border-color: var(--tone-warn-line);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------- toolbar */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+
+.toolbar .spacer {
+  flex: 1 1 auto;
+}
+
+.status-line {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  min-height: 1.2em;
+}

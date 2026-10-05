@@ -1,0 +1,697 @@
+# =============================================================================
+# Pseudomonas aeruginosa antimicrobial resistance pipeline
+# SCIENCE CONFIGURATION - machine-independent
+#
+# This file contains the science, and only the science. It holds NO paths, NO
+# thread counts, NO memory limits and NO database locations, because those
+# differ between the development laptop and the analysis machine and a
+# divergence there must be impossible rather than merely unlikely.
+#
+# Machine-specific settings live in config/machines/<name>.yaml. An overlay is
+# permitted to contain ONLY `machine`, `paths` and `runtime`; any other
+# top-level key is a configuration error, which is what makes it structurally
+# impossible for two machines to disagree about the science.
+#
+# This file contains NO sample identifiers and NO biological results.
+# Sample-level information lives in data/metadata/ and is only read in REAL
+# mode. TEST mode reads exclusively from test_data/.
+# =============================================================================
+
+reference:
+  # WHICH reference genome is a scientific fact, so it lives here and not in a
+  # machine overlay. An earlier revision let each machine name its own, which
+  # meant two machines could quietly analyse against different genomes.
+  #
+  # WHERE the file lives is a machine fact, and is in the overlay as
+  # `paths.reference_fasta`.
+  name: GCF_000006765.1
+  accession: GCF_000006765.1
+  assembly: ASM676v1
+  organism: "Pseudomonas aeruginosa"
+  taxid: 208964
+  # Verified against the NCBI assembly record. The run checks the file it finds
+  # against this, so a truncated or substituted download is caught rather than
+  # shifting every variant coordinate silently.
+  expected_length: 6264404
+  # DERIVED from the downloaded file, not invented. Provisioned from
+  #   https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/006/765/
+  #     GCF_000006765.1_ASM676v1/GCF_000006765.1_ASM676v1_genomic.fna.gz
+  # uncompressed, and cross-checked against `expected_length` above: 6,264,404
+  # bases counted from the file, which is the figure NCBI publishes for ASM676v1.
+  # So the length and the digest describe the same genome.
+  #
+  # A REAL run verifies both, in papipeline/reference.py, before any stage runs
+  # (spec.md D5). STUB and TEST do not: they call no variants, and STUB must work
+  # with no genome on disk at all.
+  md5: b8b18c2da0cb95376bb8de30f5a8cab7
+
+
+project:
+  name: pseudomonas_amr_pipeline
+  organism: "Pseudomonas aeruginosa"
+  organism_taxid: 287
+  # Primary antibiotic. Additional antibiotics are added by appending to the
+  # `antibiotics` list below AND to config/antibiotics.tsv. No code change.
+  primary_antibiotic: imipenem
+
+organism:
+  name: "Pseudomonas aeruginosa"
+  taxid: 287
+  expected_genome_size_range: [5000000, 7000000]
+  expected_gc_percent_range: [58.0, 64.0]
+
+antibiotics:
+  - imipenem
+
+sample_id:
+  # The canonical sample identifier is the VERSIONED assembly accession. It is
+  # already the genome directory name and the FASTA filename stem, so the
+  # assembly join needs no lookup table.
+  primary: assembly_accession
+  # The example is deliberately synthetic: no real cohort accession belongs in
+  # configuration, where it would be a stray record of who is in the study.
+  description: "Versioned NCBI assembly accession, e.g. GCA_000000000.1"
+  # The format rule lives here, not in code, so it can be tightened or loosened
+  # deliberately and so the synthetic fixture identifiers used by the test
+  # suite remain valid without renaming 20 committed, byte-stable files.
+  # Real accessions look like GCA_000710625.1; the synthetic fixtures use
+  # TEST_PA_001..020. Both are accepted; a malformed identifier is still
+  # rejected, both by the pattern and by the built-in structural checks.
+  pattern: '^(GCA_[0-9]{6,}\.[0-9]+|TEST_[A-Za-z0-9]+_[0-9]{3,})$'
+  # Attributes that must map 1:1 onto the manifest when present. An assembly
+  # accession is the join key; isolate and BioSample are provenance and are
+  # checked for ambiguity rather than used for matching.
+  unique_attributes:
+    - assembly
+    - isolate_id
+    - biosample
+  # A FASTA contig header is NOT a sample identifier. Synthetic fixtures use
+  # <sample_id>_contig1 and real assemblies use NCBI accession.contigid, so
+  # nothing may build a manifest from a header.
+  contig_headers_are_sample_ids: false
+
+breakpoints:
+  # The standard the source laboratories are expected to have used, and the
+  # edition the thresholds will come from. Both are recorded either way, so a
+  # result always says which standard it was interpreted against - including
+  # when no threshold was applied at all.
+  standard: "CLSI M100"
+  edition: "UNSUPPLIED"
+  organism: "Pseudomonas aeruginosa"
+  agent: imipenem
+  # The association model uses a CONTINUOUS trait: log2(MIC) where a measured
+  # MIC exists, rather than the binary R/S label. Continuous phenotypes carry
+  # more information from the same cohort. The base is recorded here because it
+  # changes the numbers pyseer sees.
+  log_base: 2
+  # THRESHOLDS ARE DELIBERATELY EMPTY.
+  #
+  # CLSI M100 is a paywalled standard and no free primary source publishes the
+  # P. aeruginosa imipenem S/I/R triple. Writing plausible numbers here would
+  # be the worst possible failure: an unsourced threshold that reaches a result
+  # is indistinguishable, in the output, from a sourced one.
+  #
+  # So `thresholds` stays empty, and the pipeline reports that no standard was
+  # applied rather than reinterpreting anything. Supply the S/I/R MIC values
+  # from a licensed copy to switch re-interpretation on; the shape is
+  #   thresholds: {S: <mg/L>, I: <mg/L>, R: <mg/L>}
+  thresholds: {}
+  # Per-isolate exceptions, for a strain whose MIC is interpreted outside the
+  # table. Empty by default.
+  exceptions: {}
+
+phenotype:
+  enabled: true
+  allowed_values:
+    - R
+    - I
+    - S
+    - SDD
+    - ND
+  # Quantitative fields are only ever populated from measured data.
+  # R/I/S are NEVER converted into MIC or zone diameter.
+  allow_quantitative: true
+  mic_units_allowed:
+    - mg/L
+    - ug/mL
+  disk_diameter_mm_column: zone_diameter
+
+analysis:
+  amr: true
+  mlst: true
+  virulence: true
+  regulators: true
+  structural_variants: true
+  pangenome: true
+  phylogeny: true
+  gwas: true
+  convergence: true
+  cooccurrence: true
+  # Stage 6 and 6a. Both are switched on by the reconciliation that followed
+  # f5573f5: before it, the pipeline refused them as unbuilt, and the
+  # `variants` Snakemake rule failed in STUB because a stage disabled here
+  # executes nothing and exits non-zero.
+  #
+  # Enabling the stage is NOT permission to run REAL data. That is
+  # `runtime.allow_real_mode` in the machine overlay, and it is false on all
+  # three. These two keys say "this stage exists and is wanted"; the overlay
+  # says whether the cohort behind it may be read.
+  variants: true
+  cohort_variants: true
+  # Stage 10, switched on by the reconciliation in the same commit that dropped
+  # it from UNBUILT_STAGES. Leaving this absent is not neutral: `UNBUILT_STAGES`
+  # bypassed the flag check, so a reconciled stage falls back to it, and a stage
+  # disabled here executes nothing - which is why the `similarity` Snakemake rule
+  # failed in STUB rather than quietly producing nothing.
+  #
+  # Same caveat as the two above: enabled means "exists and is wanted", not
+  # "may read real genomes". That is `runtime.allow_real_mode`, false everywhere.
+  similarity: true
+  # Stage 8, switched on in the SAME COMMIT that added the dispatch branch and
+  # dropped it from `run.UNBUILT_STAGES`. An earlier round added this key alone
+  # and had to take it back out: `enabled()` refuses every UNBUILT stage outside
+  # STUB, so a key with no dispatch behind it converts a silent skip into a hard
+  # NotImplementedError in TEST (66 failing nodes, measured). All three pieces
+  # land together, and
+  # `tests/integration/test_stage_taxonomy_is_self_verifying.py` asserts the
+  # dispatch chain and the taxonomy agree in both directions, so the fourth
+  # combination - a key with no branch, or a branch with no key - cannot be
+  # committed.
+  #
+  # Same caveat as the four above: enabled means "exists and is wanted", not
+  # "may read real genomes". That is `runtime.allow_real_mode`, false on all
+  # three overlays, and stage 8's REAL body refuses while it is shut.
+  recombination: true
+
+qc:
+  # Stage 1 thresholds. A sample failing a threshold is flagged, not dropped.
+  min_assembly_size: 4000000
+  max_assembly_size: 8000000
+  min_n50: 25000
+  max_ambiguous_bases: 50000
+  # Hooks. Disabled by default; adapters are plugged in when tools exist.
+  hooks:
+    species_confirmation: false
+    contamination: false
+    completeness: false
+    duplicate_detection: false
+
+annotation:
+  tool: bakta
+  # Databases are pinned by version in config/references.tsv and are never
+  # downloaded or updated implicitly during a run.
+  allow_database_update: false
+  # Repository-relative (AGENTS.md rule 2). BAKTA_DB overrides it per machine.
+  # This is the `db-light/` directory itself, not its parent: Bakta refuses with
+  # "version file not readable" if --db is given the parent.
+  #
+  # The light edition is deliberate, not a default. It is what
+  # docs/pilot100_pipeline_steps.md records the pilot using, and what
+  # docs/design/07-bakta-optimization.md, docs/design/05-cli-design.md and
+  # papipeline/benchmark/bakta10.py all assume. The full edition remains the
+  # better choice if cross-lineage gene coverage starts mattering: this is a
+  # species-specific light database, and a study spanning STs 164/192/235/308/
+  # 357/620 may need the wider set.
+  bakta_db: db/bakta_db/db-light
+  # off | prefer | require. Whether stage 2 may reuse Bakta output already on
+  # disk instead of invoking Bakta again for that genome.
+  #
+  # `off` (the default) is the pre-existing behaviour and stays the default:
+  # every genome is annotated by the tool. This is not caution for its own sake -
+  # reuse means trusting an annotation that nothing in this run produced, and
+  # the only evidence available is the output's own header. `prefer` reuses a
+  # genome's output when that header, the file set, and the GFF/TSV agreement
+  # all verify, and runs the tool for the genomes where they do not. `require`
+  # reuses what verifies and records a NAMED refusal for the rest, never
+  # invoking Bakta at all; it is what makes a run against pre-computed
+  # annotation possible.
+  #
+  # The decision is per sample, never per cohort: this stage already records an
+  # unusable genome and carries on (see papipeline/stages/annotation.py), and one
+  # unverifiable isolate must not end the run.
+  #
+  # Quoted, deliberately. YAML 1.1 reads a bare `off` as the boolean false, so
+  # unquoted this key would load as `False` and the stage would refuse to start
+  # with a message about an unrecognised value.
+  reuse_tool_output: "off"
+
+mlst:
+  tool: mlst
+  scheme: "paeruginosa"
+  # Legacy PubMLST scheme name; both spellings resolve to the same scheme.
+  scheme_aliases:
+    paeruginosa: pseudomonas_aeruginosa
+  fallback_scheme: "unknown"
+  min_typing_locus_match: 5
+
+amr:
+  tool: amrfinderplus
+  database: AMRFinderPlus
+  allow_database_update: false
+  # Repository-relative, so the repository carries nobody's absolute path
+  # (AGENTS.md rule 2). AMRFINDER_DB overrides it for a machine that keeps its
+  # database elsewhere; the version still has to match config/references.tsv,
+  # which is what makes a relocated database checkable rather than merely found.
+  #
+  # 2026-08-07.1 is pinned because config/gene_families.tsv maps this database's
+  # Class/Subclass vocabulary onto imipenem, and that mapping is only valid for
+  # the release it was written against. A different release would need the
+  # mapping re-derived, not just the path changed.
+  database_path: db/amrfinderplus-db/2026-08-07.1
+  # Determinants are only linked to the project antibiotic(s) if the database
+  # entry maps to them via config/mechanisms.tsv. Otherwise antibiotic is
+  # recorded as "unmapped" rather than assumed.
+  strict_antibiotic_mapping: true
+  optional_adapters:
+    card_rgi: false
+
+virulence:
+  tool: vfdb
+  database: VFDB
+  allow_database_update: false
+  # Raw blastn caller. abricate is the usual wrapper, but it has no installable
+  # osx-arm64 build (`perl-socket` is absent for this architecture in every
+  # channel), and its own dependency list is `blast >=2.7` - so blast is the
+  # mechanism, not a workaround for it. `abricate-vfdb` does not exist as a
+  # conda package either, so the sequences are provisioned under db_root.
+  #
+  # Path is relative to the overlay's `db_root`, never absolute here.
+  sequences_db: vfdb/sequences
+  # Thresholds are abricate's published defaults for nucleotide VFDB matching,
+  # stated explicitly rather than left implicit in a blastn invocation.
+  min_identity_pct: 90.0
+  min_coverage_pct: 90.0
+  evalue: 1.0e-5
+  blast_program: blastn
+  # One hit per factor is structural, not a knob: VFDB holds several sequences
+  # under one factor (`Type IV pili (VF0082)` covers fimV, xcpQ, algG), so the
+  # caller collapses to one row per factor. Counting sequences instead would
+  # report a count of loci as a count of factors.
+
+regulators:
+  # Loci screened for resistance-associated chromosomal variation.
+  genes_source: regulators.tsv
+  # Promoter-region assessment requires a reliable upstream window. Disabled
+  # until an aligner and a reference are pinned, per scientific rule 7.
+  promoter_assessment_enabled: false
+  promoter_upstream_window: 200
+
+structural_variants:
+  enabled: true
+  # Only `confirmed` calls are promoted; `candidate` stays candidate.
+  promote_candidate_calls: false
+  minimum_deletion_size: 50
+  insertion_sequence_families: []
+  # --- assembly-only caller -------------------------------------------------
+  # This pipeline's input is assembled genomes (FASTA). There are no reads, so
+  # there is no read depth, no coverage and no split-read or discordant-pair
+  # evidence - which is the evidence class every dedicated SV caller is built
+  # on. `sniffles`, `delly` and `gridss` are all installable on osx-arm64 and all
+  # require reads, so none applies. `sista`, the assembly-based caller, is in no
+  # channel. `mummer4` does not solve either (`libcxx >=18` does not exist for
+  # this architecture).
+  #
+  # What remains is an assembly-to-reference alignment: `nucmer`, from homebrew,
+  # declared in the machine overlay's `tool_search_dirs` per the "never hard-code
+  # anything environmental" rule. Flags verified against `nucmer --help` 4.0.1,
+  # not from memory.
+  caller: nucmer
+  nucmer_minmatch: 20        # -l, default 20
+  nucmer_mincluster: 65      # -c, default 65
+  nucmer_maxgap: 90          # -g, default 90
+  # `--maxmatch` uses every anchor regardless of uniqueness. A draft assembly is
+  # repetitive, and uniqueness filtering drops exactly the repeat-flanked
+  # breakpoints this stage exists to look for. Sensitivity is the right trade
+  # for candidate-only calls.
+  nucmer_maxmatch: true
+  # An assembly is one contig among many: a draft assembly breaks where a read
+  # spans a repeat. Unaligned region therefore does NOT mean "sequence absent
+  # from the reference", and calling it an insertion would report assembly
+  # fragmentation as structural variation. Only gaps *between* two alignments on
+  # the same contig are reported as candidates; unaligned contig ends are
+  # `not_assessable`, which is what scientific rule 7 calls a contig gap.
+  min_sv_size: 1000
+  # Both flanking alignments must be at least this identical to the reference,
+  # so a breakpoint is called between two confidently-matched blocks rather
+  # than between one solid block and one noisy one.
+  min_flanking_identity_pct: 90.0
+  # Assembly-only evidence cannot meet rule 7's bar for `confirmed`: there is no
+  # orthogonal support to demand. Every call this caller makes is a candidate,
+  # and `confirmed_only()` is empty for every REAL cohort by construction.
+  max_call_status: candidate
+
+gwas:
+  tool: pyseer
+  enabled: true
+  # Feature columns are named `<type>__<label>`; the prefix declares the
+  # feature type and must appear in this list.
+  feature_types:
+    - gene
+    - gene_presence_absence
+    - snp
+    - unitig
+    - kmer
+  # Outcome is binary resistance: R vs not-R. I is kept as its own level and
+  # is never silently folded into R or S.
+  outcome:
+    positive: [R]
+    negative: [S]
+    excluded: [I, SDD, ND]
+  min_samples_per_group: 3
+  correction: fdr_bh
+  significance_threshold: 0.05
+  filter: mixed
+  kinship: "unitig"
+  # A feature confounded with a single lineage is reported as lineage-linked.
+  lineage_confound_threshold: 0.9
+
+  # Step 12a: reduce the variant matrix to unique patterns, in a step of its
+  # own, so the multiple-testing threshold can be read rather than trusted.
+  #
+  # `alpha` is the family-wise error rate the Bonferroni correction is applied
+  # at, and the threshold handed to pyseer is `alpha / n_unique_patterns`. It
+  # is a scientific choice and lives here; the helper's memory, cores and
+  # scratch directory are machine facts and live in the overlay.
+  #
+  # `method` is `bonferroni` and nothing else. pyseer documents exactly one
+  # procedure here - its own `scripts/count_patterns.py`, vendored at
+  # scripts/gwas/count_patterns.py because pyseer 1.1.2 does not package it -
+  # and it has no flag for a different correction. Both keys are REQUIRED: each
+  # has an upstream or conventional default (the helper's own `0.05`, the sole
+  # supported correction), and inheriting one would let a run report a threshold
+  # without anyone having chosen it. An absent key is a load-time error.
+  unique_patterns:
+    method: bonferroni
+    alpha: 0.05
+
+phylogeny:
+  aligner: panaroo
+  snp_caller: snp_sites
+  # The package is `iqtree`; there is no `iqtree2` in any channel. The
+  # installed 3.1.3 ships BOTH an `iqtree` and an `iqtree3` binary -
+  # verified in docs/environment-arm64.md.
+  tree_builder: iqtree
+  # MEASURED, not chosen. pa-artifacts/phy2/ratios_44pairs.txt:54 over the 44
+  # pair-alignments of this cohort's core alignment, comparing the three
+  # variants at equal base counts (70660 and 4642925):
+  #   GTR+G        -> GTR+F+G4        lnL -376357.853   alpha spread 1.2527
+  #   GTR+G+ASC    -> GTR+F+ASC+G4    lnL -354053.643   alpha spread 0.3423
+  # `GTR+G+ASC` is what phy2 REQUESTED and `GTR+F+ASC+G4` is what the pinned
+  # binary RESOLVED it to; the request string is what belongs here, because
+  # that is the string phy2 measured and the one a reader can reproduce.
+  #
+  # The revert that stood between the measurement and this commit was waiting
+  # on the filter, and the filter now exists: `adapters/iqtree.py`
+  # `drop_partially_constant_columns` runs before the search, so the columns
+  # the pinned binary would otherwise reject +ASC over are gone by the time
+  # `-m GTR+G+ASC` is read.
+  models: "GTR+G+ASC"
+  # +ASC is only estimable if the alignment still carries variable sites, so
+  # the columns that are constant once gaps and Ns are IGNORED are removed
+  # first. Ruling R8: IQ-TREE uses +ASC AFTER removing columns that are
+  # constant after ignoring gaps/N.
+  #
+  # NOT the same as bcftools/iqtree `-fconst`. Row (c) of the same artifact,
+  # run as `GTR+G -fconst`, removes *every* invariant column including the
+  # variable-but-gap-filled ones and collapses the fit outright (lnL
+  # -6800510.031, a factor of ~19 worse) because it strips the informative
+  # positions along with the uninformative ones. What is wanted here is the
+  # narrower "constant ignoring gaps/N" test, not `-fconst`.
+  #
+  # LIVE as of the tree-lineage-asc commit that added it:
+  # `stages.phylogeny.build_tree_outputs` reads this key and passes
+  # `drop_partially_constant=` to the adapter, which filters before the search
+  # and records how many columns went. Before that it parsed and was inert.
+  asc_drop_partially_constant: true
+  # The tree tip set must equal the master manifest exactly.
+  require_exact_sample_match: true
+  min_core_alignment_fraction: 0.5
+
+# =============================================================================
+# Lineage assignment.
+#
+# `lineage_label` is what stages 9 (phylogeny) writes and what stages 14 and 15
+# (convergence, cooccurrence) consume; until a producer writes it, both refuse
+# on the literal 'unknown' sentinel rather than reporting "no convergence
+# found" (see papipeline/stages/convergence.py _CONVERGENCE_BLOCKERS).
+#
+# Ruling R4: lineage_label IS the MLST sequence type from stage 3. The method
+# is recorded so a result always says how its lineages were defined, and so a
+# later method is a visible change rather than a silent one.
+# =============================================================================
+lineage:
+  # `st` - the MLST sequence type, taken from stage 3.
+  #
+  # `tree_cut` - cutting the stage 10 tree into clades at a support threshold.
+  # DEFERRED, deliberately: it needs a support value, a minimum clade size, and
+  # a rule for isolates the tree places ambiguously, and none of those has been
+  # chosen. Naming it here as an accepted value would be claiming a decision
+  # this project has not made. Do not add it to the loader's accepted set until
+  # the rule exists to be recorded.
+  method: st
+
+# =============================================================================
+# Cohort selection.
+#
+# Which members of the manifest this run analyses. Null means "the whole
+# roster" -- the default every production overlay runs with, and the state in
+# which an unprepared isolate must still be visible so it can refuse rather
+# than be silently dropped.
+#
+# A subset is a list of sample_ids, one per line, `#` comments permitted. It
+# is an INPUT list, not configuration: it names cohort members, and a member
+# list is sample-level information, which this file explicitly must not carry.
+# That is why the value is nullable and why the file it names lives outside
+# configuration entirely.
+# =============================================================================
+cohort:
+  # null = no subset; the run uses the whole manifest.
+  subset_file: null
+
+convergence:
+  # A determinant seen in >= this many independent lineages is convergent.
+  min_independent_lineages: 2
+  # Present in more than this fraction of samples: background, not convergent.
+  widespread_fraction: 0.75
+  # Seen in at most this many samples: rare/isolated.
+  rare_max_samples: 2
+  minimum_branch_support: 0.0
+
+cooccurrence:
+  tests:
+    - genes
+    - gene_mutation
+    - mutation_mutation
+    - gene_mechanism
+    - mechanism_mechanism
+  correction: fdr_bh
+  significance_threshold: 0.05
+  # DEAD: parsed by nothing. No module reads cooccurrence.min_cell_count, so
+  # the contingency-table filter it names is not applied and every
+  # non-degenerate pair reaches Fisher. Recorded in the round-12 backlog; not
+  # wired here because doing so changes which rows this stage emits.
+  min_cell_count: 2
+  # How the C(F,2) pairs are counted. `matrix_product` is a blocked
+  # M.T @ M; `naive` is the Python pair loop and exists as the oracle
+  # matrix_product is tested against (tests/unit/test_cooccurrence_pair_counter.py).
+  # Selecting `naive` on a cohort-sized feature set is not a fallback, it is
+  # the slow path this key was added to avoid.
+  pair_counter: matrix_product
+  # Block edge, in features, for the counting matrix product. Bounds the
+  # transient to chunk x chunk float32, so peak memory is set by this number
+  # rather than by the feature count. Pinned per the R2 rule: a memory bound
+  # that lives in code instead of here is a memory bound nobody can change
+  # without editing a stage.
+  count_chunk_features: 512
+  # ---- the configured feature universe -------------------------------------
+  # Which of the three feature classes stage 14 may draw pairs from. All three
+  # by default, because all three are determinants:
+  #   gene      acquired AMR determinant names from 04_amr.tsv
+  #             (determinant_type == AMR only, so chromosomal and intrinsic calls
+  #             are excluded - convergence.load_amr_names)
+  #   mutation  `{gene}:{variant}` from regulators/regulator_variants.tsv,
+  #             restricted to the regulator loci in config/regulators.tsv
+  #   mechanism the `mechanism` column of 05_mechanisms.tsv, a CLOSED set of
+  #             five names: the four distinct mechanisms in
+  #             config/mechanisms.tsv plus `locus_intact`, which
+  #             mechanisms.py writes directly rather than from that table
+  #
+  # What is deliberately NOT here: gene presence/absence. Stage 7 writes
+  # pangenome/gene_presence_absence.tsv and stage 14 does not read it, so the
+  # universe is determinants and not the ~10,000-feature pangenome. Adding it
+  # would be a decision about what question this stage answers, not a tuning
+  # change, and it is why `mutation` is the only class that grows without bound.
+  feature_classes:
+    - gene
+    - mutation
+    - mechanism
+  # A feature carried by fewer than this fraction of the cohort cannot be tested
+  # for co-occurrence with anything, and each feature removed removes F-1 pairs
+  # from the universe. A FRACTION, not a sample count, because a count means
+  # something different at n=20 and n=900 - which is the confusion this avoids.
+  #
+  # At 0.05 the floor is ceil(0.05 * n), so it is 1 for every cohort up to n=20:
+  # INERT on the committed 20-sample fixtures, and an active filter from n=21.
+  # Measured at n=10 on the real isolates, `mutation` features have a median
+  # carrier count of 4/10 = 40% and 36.7% are carried by >= 5/10, so a 5% floor
+  # sits well below the typical feature and removes the near-singleton tail
+  # rather than anything with power.
+  min_prevalence: 0.05
+  # Hard ceiling on the admitted universe, summed across `feature_classes`.
+  # Exceeding it REFUSES, naming the count and the cap, because the alternative
+  # is one Python object and one hypergeometric sum per pair until the machine
+  # dies, and an OOM reads as a bioinformatics bug.
+  #
+  # 2,500 is chosen from the MEASURED cost of a full run at exactly this cap
+  # (round-13/cooc2/scale_at_cap.py, n=900, 2,500 features split 664/1831/5,
+  # Darwin-arm64 / Python 3.11.16 / numpy 2.4.6, 1-min load 3-8), not from a
+  # round number:
+  #   count                    0.34 us/pair  (blocked M.T @ M)
+  #   test + row            1,902.50 us/pair  (MEASURED 1,902 us/pair over the
+  #                          3,114,595 pairs admitted; dominated by one
+  #                          scipy.stats.fisher_exact on a 900-row table)
+  #   resident                  881 B/row    (MEASURED 2321.2 MiB RSS delta /
+  #                          2,763,235 emitted rows, incl. the BH key dict)
+  # and the run at the cap took, end to end through `_compute`:
+  #   5,925.67 s = 1.646 h wall, 2.27 GiB peak RSS, 2,763,235 rows emitted
+  #   (88.7% of admitted pairs survive the degenerate rule)
+  # F=2,500 admits at most C(2500,2) = 3,123,750 pairs whatever the split
+  # between classes. The measured 2.27 GiB is 3.5% of the bigmachine's
+  # runtime.memory_mb (65536 MB), so the stage is not a claim about the whole
+  # machine.
+  #
+  # Note what the measurement says that an isolated micro-benchmark did not:
+  # fisher_exact cost is a function of the TABLE MARGINS, not of the code path.
+  # The same call on a 90-carrier table measures 128 us; on a 900-row table it
+  # measures 500-650 us; cProfile puts fisher_exact at 85% of this stage's wall
+  # at n=900. A cap justified from the small-table figure would have been wrong
+  # by an order of magnitude, which is why the scale test is run at n=900.
+  #
+  # This cap is NOT decoration. Projecting the measured cumulative growth of the
+  # `mutation` universe (13.0 new {gene}:{variant} names per isolate over
+  # n=5..10, extrapolated linearly, and the true curve saturates so that is an
+  # UPPER bound) gives 11,870 at n=900 against 300 at n=10; `gene` projects to
+  # 2,368; `mechanism` cannot exceed 5. So a full n=900 universe is ~14,242
+  # features -> C(14242,2) = 101,410,161 pairs -> ~54 h and ~74 GiB, and it
+  # REFUSES. 2,500 is the smallest round number above the gene+mechanism
+  # projection (2,373), so the one cohort-scale configuration that runs today
+  # - genes against mechanisms - actually runs, and the mutation-inclusive
+  # analysis is refused with instructions rather than attempted.
+  max_features: 2500
+
+reporting:
+  test_report_name: test_pipeline_report
+  # A scientific report about real data is produced only in REAL mode.
+  real_report_enabled: false
+  figure_format: png
+  figure_dpi: 150
+
+# =============================================================================
+# Variant calling. Pinned from a REAL run, not written from an expectation of
+# what the tools do: minimap2 -ax asm20 on GCA_000710625.1 against the pinned
+# PAO1 reference, then bcftools mpileup | bcftools call -mv, 2026-09-29.
+# Measured: 0.79 s per 6.4 Mb assembly, 96% of bases aligned, MAPQ 60.
+# 835 assemblies is roughly 11 minutes single-threaded.
+# =============================================================================
+variants:
+  # asm20, not asm5/asm10: the cohort is unannotated draft assemblies of one
+  # species with real sequence, not reads. asm5/asm10 are tuned for divergent or
+  # contaminated inputs and would over-align here. Chosen by judgement - the spec
+  # named the tools, not the preset - so it is recorded with its reasoning.
+  minimap2:
+    preset: asm20
+    output_format: SAM          # -a
+    secondary_alignments: true  # --secondary=no discards all but one hit per
+                                 # contig and was measurably wrong here
+  samtools:
+    # NOT USABLE for alignment handling in this environment. Version 0.1.19
+    # auto-detects input format by extension and refuses SAM text outright
+    # ("invalid BAM binary header"), and has no -O flag. It only indexes FASTA.
+    # Workaround: pysam converts SAM to BAM and does sort + index. bcftools also
+    # refuses an unsorted or unindexed input, so this path is not optional.
+    convert_and_index_with: pysam
+    sam_text_supported: false
+    pinned_version: 0.1.19
+  bcftools:
+    version: 1.23.1
+    # Assembly-vs-reference calling. -q/-Q 20 at both ends is permissive, because
+    # an assembly is a consensus sequence: depth is 1 at every locus, so there is
+    # no depth to filter on and a strict threshold would return nothing. QUAL is
+    # consequently constant at 30.4183 across every called site and carries no
+    # per-site information; no threshold may be derived from it.
+    mpileup:
+      min_mapq: 20              # -q
+      min_bq: 20                # -Q
+      annotate: FORMAT/DP,FORMAT/AD
+      # `-d, --max-depth INT  Max raw per-file depth; avoids excessive memory
+      # usage [250]` (pinned bcftools 1.23.1 usage block). INHERITED DEFAULT,
+      # not a threshold chosen here: it was recorded to note what the tool does.
+      # It is now stated as DEFAULT_MPILEUP_MAX_DEPTH in config/loader.py so the
+      # adapter no longer carries its own bare 250 literal.
+      #
+      # MEASURED against the pinned 6,264,404 bp PAO1 (peak RSS):
+      #   depth 1 (ordinary assembly case)  94 MB at -d 250; -d 1 identical.
+      #     The cap does not bind, so it is not what an ordinary isolate costs.
+      #   60 x 500 kb contig records on one locus (true depth 60, which is what
+      #     --secondary=yes yields at a repeat locus):
+      #       -d 250 -> 127 MB, -d 20 -> 77 MB, -d 1 -> 52 MB.
+      # -d is bcftools' ONLY memory lever: -r/-t region splitting, -L/--max-idepth,
+      # -O z/-O b, stdout-vs--o and --threads were each measured and none reduced RSS.
+      # --max-BP/-b DOES NOT EXIST in 1.23.1 and is not used.
+      #
+      # NOT LOWERED, DELIBERATELY: -d is a subsampling cap, so lowering it past
+      # the true depth moves FORMAT/DP and FORMAT/AD and therefore which alleles
+      # `call -mv` emits. QUAL is constant at 30.4183 across every called site,
+      # so DP/AD is not recoverable downstream. That is a SCIENCE decision about
+      # the callable variant set, deferred to the science layer, not an
+      # engineering one. See papipeline/config/loader.py.
+      max_depth: 250
+      # `-O, --output-type TYPE  'b' compressed BCF; 'u' uncompressed BCF;
+      # 'z' compressed VCF; 'v' uncompressed VCF; 0-9 compression level [v]`
+      # Stage 6's dominant unbounded cost is output VOLUME, not memory: with
+      # FORMAT/DP,FORMAT/AD over a whole 6.26 Mb reference, mpileup emits a
+      # record per covered position -- measured 750 MB of raw VCF for ONE
+      # isolate, ~7.5 GB for 10 isolates, ~625 GB for 835. 'z' cuts that 40x
+      # (750 MB -> 19 MB). It buys no RSS (measured 127.4 MB vs 125.2 MB) and is
+      # here because the volume is real and unbounded.
+      #
+      # bcftools picks compression from the output FILENAME's extension, so the
+      # adapter's RAW_VCF ends in `.vcf.gz`: `-O z` to a plain `.vcf` name wrote
+      # 69,488,493 bytes of UNCOMPRESSED data and exited 0 silently.
+      # Compression does not change what is called (verified: identical
+      # `call -mv` output with -O v vs -O z on the same BAM).
+      output_type: z
+      # `-m, --min-ireads`, default 2. Verified against bcftools 1.23.1
+      # (`bcftools mpileup` usage line 53):
+      #   -m, --min-ireads INT   Minimum number gapped reads for indel
+      #                           candidates [2]
+      #
+      # It is NOT a read-depth filter. It counts GAPPED reads supporting an indel
+      # candidate, and the pinned bcftools default of 2 is a READS threshold --
+      # which no assembly input can ever satisfy, because a draft assembly is a
+      # single consensus sequence: there is exactly one gapped read per indel,
+      # not two. Left at the default, every assembly indel is discarded before
+      # it is ever considered, and stage 6 then reports the locus as clean.
+      #
+      # Ruling R6: assembly alignments are depth 1, so the default is 1.
+      #
+      # Reaches the command as `-m 1`; see papipeline/adapters/minimap2.py
+      # mpileup_command(). Pinned bcftools version is above.
+      min_ireads: 1
+    call:
+      # The measured run was `bcftools call -mv`. `-m` is --multiallelic-caller
+      # and `-v` is --variants-only; they are different switches, and an earlier
+      # revision of this comment labelled variants_only as `-m`, which is the
+      # other one. The values were right and the comment was wrong - corrected
+      # 2026-09-29 against `bcftools call --help` while the adapter was written.
+      # Emitting `-m` alone would emit every site, reference matches included,
+      # and the cohort merge would treat them as polymorphisms.
+      variants_only: true       # -v
+      multiallelic: split       # -m; one row per ALT allele in the contract
+  # The reference index must be checked before anything reads it. Indexing a
+  # bgzipped copy of the reference produced a .fai claiming 64,400 bases for a
+  # 6,264,404 base file, and every tool then produced confident wrong output.
+  # Index the UNCOMPRESSED fasta; verify_fai_index() refuses a short index.
+  reference_index:
+    index_uncompressed_fasta: true
+    verify_against_expected_length: 6264404

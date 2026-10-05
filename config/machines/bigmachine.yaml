@@ -1,0 +1,118 @@
+# =============================================================================
+# Machine overlay: LARGE LINUX MACHINE (the full 15-stage analysis)
+#
+# This file may contain ONLY `machine`, `paths` and `runtime`; anything else is
+# a configuration error. The science lives solely in config/science.yaml, so
+# this machine runs exactly the same science as the laptop, with more of
+# everything else.
+#
+# NOTHING IN THIS FILE HAS BEEN VERIFIED. A linux-64 environment cannot be
+# solved from a macOS host, because the solver resolves glibc from the host and
+# reports every linux-only package as missing. Before the first run on this
+# machine:
+#
+#   1. micromamba env create -f environment/environment-linux.yml --dry-run
+#   2. note that environment-linux.yml pins gubbins 3.4.1, a py310 build, while
+#      this overlay targets the same Python 3.11.16 as the laptop. If that does
+#      not solve, the phylogeny stages need a Python 3.10 environment or Gubbins
+#      installed outside conda. Do not guess; run the solve.
+#   3. provision the databases listed under `tools` below, out of band
+#
+# The current dataset is ~899-900 isolates (e.g. PDC_essential.tsv as it stands
+# today), which is why max_samples is absent: the cap is a laptop safety rail, not
+# a property of the science, and must not be written as a target the run must hit.
+# =============================================================================
+
+machine: bigmachine
+machine_class: analysis
+
+paths:
+  data_root: data
+  test_data_root: test_data
+  results_root: results
+  reports_root: results/reports
+  intermediate_root: results/intermediate
+  status_dir: status
+  db_root: db
+  # WHICH reference this is (GCF_000006765.1, 6264404 bp) is science, in
+  # config/science.yaml. Only its location is a machine fact.
+  reference_fasta: db/reference/GCF_000006765.1/GCF_000006765.1_ASM676v1_genomic.fna
+  # The PDC isolate table. Named on every overlay rather than only on the smoke
+  # one so the key has one meaning: it is where the table is, and whether this
+  # run reads it is decided by whether the overlay is a smoke overlay, not by
+  # whether the key is present. Untracked clinical data (AGENTS.md rule 4), so
+  # relative to the repository root and absent from a fresh checkout.
+  pdc_table: PDC_essential.tsv
+
+runtime:
+  # PLACEHOLDER VALUES. These are not measured for this machine. Set them from
+  # the machine's real core count and RAM before the first run; a wrong memory
+  # ceiling is how an OOM looks like a bioinformatics bug.
+  threads: 32
+  memory_mb: 65536
+  # Bounds for the vendored unique-pattern helper (step 12a), which shells out
+  # to `sort`. Placeholder for the same reason the values above are: they must
+  # come off this machine, not off the laptop overlay. `sort` is a separate
+  # process, so these are deliberately not this pipeline's own memory_mb.
+  unique_patterns_memory_mb: 8192
+  unique_patterns_cores: 4
+  # Scratch space for the same helper's `sort -T`. `/var/tmp` rather than
+  # upstream's `/tmp` default because on a Linux analysis machine `/tmp` is
+  # commonly a small tmpfs and `sort` spills to disk on a cohort-sized patterns
+  # file. This is a guess about this machine's mounts, not a verified fact - see
+  # the header - so check `df /tmp /var/tmp` before the first run and change it
+  # here if `/var/tmp` turns out to be the smaller one. Under `runtime` rather
+  # than `paths`, which is repository-relative by an invariant this repository
+  # enforces; a scratch directory cannot be.
+  unique_patterns_temp_dir: /var/tmp
+  log_level: INFO
+  # Stays closed until the analysis phase is authorised in writing. The user
+  # must also say `run real samples`; both gates must open.
+  allow_real_mode: false
+  # No sample cap. Cohorts of roughly this size are the reason this machine
+  # exists; nothing here assumes a specific number of isolates.
+  observatory:
+    enabled: false
+    db: ~/.local/share/papipeline/observatory.db
+    run_key: pipeline
+
+# --- tool availability ------------------------------------------------------
+# panaroo and gubbins are marked available on the assumption that
+# environment-linux.yml solves on this machine. That has NOT been verified. If
+# the solve fails, set them false here rather than deleting the stages.
+#
+# DO NOT "FIX" gubbins HERE TO MATCH THE LAPTOP, and do not assume the conda
+# package is fine here either. What was OBSERVED is macOS-only and does not
+# transfer: on osx-arm64 the bioconda build leaves _gzopen/_gzread/_gzclose
+# unresolved and exits 139 (SIGSEGV) on the one real alignment it was measured
+# against, where a source build of the same tag exits 0 and writes nine files.
+#
+# What has NOT been shown, in either direction, is what happens on Linux. No
+# Linux run of either binary is recorded anywhere in this repository, so the
+# statements "the conda package is correct on Linux" and "the defect is
+# macOS-specific" are both untested predictions, not findings. This machine's
+# own header already says its availability block was NOT verified against a real
+# solve here; treat gubbins the same way and verify it on the Linux machine
+# before relying on it.
+#
+# Pointing this file at tools/gubbins/ or adding it to tool_search_dirs would be
+# copying a platform workaround whose cause has not been shown to exist on this
+# platform, and would make this machine depend on a checkout-local source build
+# for no demonstrated reason. See
+# https://github.com/nickjcroucher/gubbins/issues/452
+tools:
+  seqkit:      { available: true }
+  bakta:       { available: true }
+  mlst:        { available: true }
+  amrfinder:   { available: true }
+  blast:       { available: true }
+  minimap2:    { available: true }
+  samtools:    { available: true }
+  bcftools:    { available: true }
+  iqtree:      { available: true }
+  snp-sites:   { available: true }
+  pyseer:      { available: true }
+  mafft:       { available: true }
+  panaroo:     { available: true }
+  gubbins:     { available: true }
+

@@ -1,0 +1,7 @@
+sample_id	gene	variant	reference	alternate	effect	mechanism	confidence	claim_status
+A1	oprD	A100T	G	T	missense	loss_of_function	0.9	DETECTED
+B1	oprD	A100T	G	T	missense	loss_of_function	0.9	DETECTED
+C1	oprD	A100T	G	T	missense	loss_of_function	0.9	DETECTED
+A1	mexR	I24A	A	G	missense	loss_of_function	0.9	DETECTED
+A2	mexR	I24A	A	G	missense	loss_of_function	0.9	DETECTED
+A3	mexR	I24A	A	G	missense	loss_of_function	0.9	DETECTED

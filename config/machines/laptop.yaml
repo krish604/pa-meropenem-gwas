@@ -1,0 +1,178 @@
+# =============================================================================
+# Machine overlay: DEVELOPMENT LAPTOP (macOS arm64, 16 GB)
+#
+# This file may contain ONLY `machine`, `paths` and `runtime`. Anything else is
+# a configuration error. That restriction is deliberate: it is what guarantees
+# the laptop and the analysis machine cannot disagree about the science, which
+# lives solely in config/science.yaml.
+#
+# THE 20-SAMPLE CAP IS A SAFETY RAIL, NOT A SUGGESTION. This machine has 16 GB
+# of RAM. Exceeding the cap stops the run before any work is done, with a
+# message naming the limit and what to change. Do not raise it here to make a
+# failure go away; use config/machines/bigmachine.yaml, which is what the
+# large-cohort run uses.
+#
+# TOOL AVAILABILITY below is not a wish list. It is what was verified by a real
+# solve and a real run on osx-arm64; see docs/environment-arm64.md for the
+# evidence.
+#   panaroo  AVAILABLE, but not through conda. The bioconda recipe cannot solve
+#            on osx-arm64 at any version (hard prokka dependency needing
+#            tbl2asn-forever or a dead perl=5.26.2 pin; zero osx-64 packages are
+#            pulled, so it is metadata, not architecture). prokka is never
+#            invoked at runtime - panaroo/prokka.py is a GFF3 reader with no
+#            subprocess call - so it is installed from source via pip, pinned to
+#            an exact commit in environment/environment.yml. Verified end-to-end
+#            against real Bakta GFF3: exit 0, 10,019 gene families, 4,828 core.
+#   gubbins  AVAILABLE, but not from conda either, and for a DIFFERENT reason
+#            than panaroo - so do not merge the two rationales. The bioconda
+#            osx-arm64 build of 3.4.3 (py310hdfa5cb7_1, the newest published)
+#            leaves _gzopen/_gzread/_gzclose UNRESOLVED - nm -u reports them
+#            undefined in libgubbins.0.dylib, and libSystem exports no gz*, so
+#            nothing in the conda process can satisfy them. OBSERVED, on one
+#            identical alignment with one identical argv and only the binary
+#            differing: the conda build exits 139 (SIGSEGV) and writes NOTHING;
+#            the source build of the same v3.4.3 tag exits 0 and writes nine
+#            files. configure.ac:40 requires zlib
+#            (PKG_CHECK_MODULES([zlib], [zlib])), which is consistent with a
+#            conda recipe that fails to honour a dependency the upstream build
+#            system demands.
+#            NOT PROVEN, and not to be read into the above: that the two builds
+#            produce identical OUTPUT (no diff of their results is recorded
+#            anywhere), that any lldb backtrace shows a null jump (none is stored
+#            here), and that RELINKING the conda binary would help - relinking
+#            was proposed once and withdrawn, and has never been tried. The
+#            source build is a rebuild from source, not a relink.
+#            Workaround: scripts/build_gubbins_from_source.sh builds the same tag
+#            from source into tools/gubbins/, which is why the binary is NOT on
+#            PATH and must be declared in paths.tool_search_dirs below.
+#            Filed upstream: https://github.com/nickjcroucher/gubbins/issues/452
+#
+# THIS IS TRUE ONLY BECAUSE OF THE SOURCE BUILD. The `available: true` below is a
+# statement about a binary produced by scripts/build_gubbins_from_source.sh and
+# found via paths.tool_search_dirs, NOT about the conda package - the conda
+# osx-arm64 build is unusable here (see above) and nothing in this overlay can
+# make it work. The two are not interchangeable.
+#
+# The recombination stage does not take that on trust. papipeline/adapters/
+# gubbins.py runs `self_test` against a tiny generated probe alignment BEFORE any
+# real run, and refuses a binary that exits 139 (SIGSEGV), naming the broken
+# osx-arm64 conda build in the error. The decision is made on the exit code
+# rather than a version string, because a wrapper can spoof a version and cannot
+# spoof a segfault. So a conda gubbins that shadows the source build is caught at
+# the gate, not 30 seconds into a run.
+#
+# Consequences: stage 7 (pangenome) is no longer blocked, and stage 8
+# (recombination) now HAS a dispatch branch (run.py:1206, UNBUILT_STAGES is
+# empty) with `analysis.recombination: true` in science.yaml. Both facts are
+# separate and are tracked separately: a tool being on this machine says the
+# stage can find it, and a dispatch branch says there is code to call. A REAL
+# stage 8 still needs an operator-provisioned panaroo core-gene alignment
+# (derive_recombination_tables refuses by name without one) and still refuses
+# while `runtime.allow_real_mode` is false.
+# STUB and TEST modes are unaffected - they invoke no tools.
+# =============================================================================
+
+machine: laptop
+machine_class: development
+
+paths:
+  data_root: data
+  test_data_root: test_data
+  results_root: results
+  reports_root: results/reports
+  intermediate_root: results/intermediate
+  status_dir: status
+  db_root: db
+  # WHICH reference this is (GCF_000006765.1, 6264404 bp) is science, in
+  # config/science.yaml. Only its location is a machine fact.
+  reference_fasta: db/reference/GCF_000006765.1/GCF_000006765.1_ASM676v1_genomic.fna
+  # The PDC isolate table, which is a stage input only for an overlay that
+  # declares itself a smoke overlay - every other overlay builds its cohort from
+  # `data/metadata/sample_metadata.tsv` and never reads this. It is named here
+  # because it is REQUIRED by that one overlay and, until round 12, was declared
+  # by nothing at all: `snakemake --dry-run` reported a complete DAG under smoke
+  # and then all sixteen stages died at manifest load on this one file.
+  #
+  # RELATIVE to the repository root, like every other entry here. The file is
+  # untracked clinical data (`.gitignore:44` `PDC_*.tsv`, AGENTS.md rule 4), so
+  # a fresh checkout will not have one and the path is provisional until an
+  # operator provisions it. Read by `papipeline.run.pdc_table_path`, which also
+  # supplies this same relative name as its default.
+  pdc_table: PDC_essential.tsv
+
+  # nucmer is homebrew-only on osx-arm64: `mummer4` does not solve in conda
+  # (`libcxx >=18` does not exist for this architecture). Declared here so the
+  # preflight reports the truth rather than what a developer once typed.
+  #
+  # gubbins is here for a different reason: it IS a conda package, but the
+  # osx-arm64 one is unusable (see the header). scripts/build_gubbins_from_source.sh
+  # installs it here instead, and RELATIVE on purpose: the loader resolves a
+  # relative entry against the repository root, so this means the same thing in
+  # every checkout and in every git worktree. An absolute path here would only
+  # be correct in the one directory the developer happened to be standing in,
+  # and would report the tool as absent everywhere else - see
+  # MachineConfig.resolved_tool_search_dirs.
+  tool_search_dirs:
+    - /opt/homebrew/opt/mummer/bin
+    - tools/gubbins/bin
+
+runtime:
+  threads: 4
+  memory_mb: 8192
+  log_level: INFO
+  # REAL mode stays closed until the analysis phase is authorised in writing.
+  allow_real_mode: false
+  # The laptop refuses to run more than this many samples. Enforced before any
+  # stage runs; see the SampleCapExceeded error.
+  max_samples: 20
+  # Bounds for the vendored unique-pattern helper (step 12a), which shells out
+  # to `sort`. These are NOT the pipeline's own limits above: `sort` is a
+  # separate process with its own address space, and capping it at this
+  # pipeline's memory_mb would be a claim about a process this config cannot
+  # see. The helper's own upstream defaults are 1024 Mb and 1 core.
+  unique_patterns_memory_mb: 1024
+  unique_patterns_cores: 1
+  # Scratch space for the same helper's `sort -T`. On a cohort-sized patterns
+  # file `sort` spills to disk, so this has to hold a file as large as the
+  # patterns file. It lives under `runtime` rather than `paths` because `paths`
+  # values are repository-relative by an invariant this repository enforces
+  # (tests/unit/test_reference_ownership.py), and a scratch directory is
+  # necessarily an absolute location on this machine.
+  unique_patterns_temp_dir: /tmp
+  # Computational Observatory. Off by default: the pipeline does not depend on
+  # it, and a normal run needs neither it nor any UI.
+  observatory:
+    enabled: false
+    db: ~/.local/share/papipeline/observatory.db
+    run_key: pipeline
+
+# --- tool availability, as verified on osx-arm64 ----------------------------
+tools:
+  seqkit:      { available: true }
+  bakta:       { available: true }
+  mlst:        { available: true }
+  amrfinder:   { available: true }
+  blast:       { available: true }
+  minimap2:    { available: true }
+  samtools:    { available: true }
+  bcftools:    { available: true }
+  iqtree:      { available: true }
+  snp-sites:   { available: true }
+  pyseer:      { available: true }
+  mafft:       { available: true }
+  panaroo:     { available: true }
+  # True because scripts/build_gubbins_from_source.sh puts a working gubbins in
+  # tools/gubbins/bin, NOT because conda works here - it does not, and the conda
+  # binary segfaults. Availability is a statement about this machine being able
+  # to run the tool, which is true by the source build and false by the package.
+  #
+  # So this entry REQUIRES the source build to have been run. It is not a claim
+  # that `conda install gubbins` suffices; on this architecture that binary
+  # exits 139 (SIGSEGV) on the real alignment it was measured against. That was
+  # the one input measured; "every input" is not a claim this file can support.
+  # The stage does not rely on this flag alone - papipeline/adapters/gubbins.py
+  # self-tests the resolved binary against a probe alignment first and refuses a
+  # segfaulting one by name, so a conda gubbins that shadows tools/gubbins/bin is
+  # caught at the gate.
+  gubbins:     { available: true }
+

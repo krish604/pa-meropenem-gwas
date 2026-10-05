@@ -1,0 +1,350 @@
+/* pages.css — the two pages SHELL owns: the DAG and the provenance record. */
+
+/* ------------------------------------------------------------- the DAG */
+
+.dag-layout {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
+  align-items: start;
+}
+
+@media (max-width: 80rem) {
+  .dag-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dag-canvas-wrap {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  overflow: auto;
+  max-height: 40rem;
+}
+
+.dag {
+  display: block;
+  min-width: 34rem;
+}
+
+.dag-edge {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+
+.dag-edge[data-evidence="observed"] {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.dag-edge[data-evidence="order"] {
+  stroke: var(--border-strong);
+  stroke-dasharray: 3 3;
+}
+
+.dag-node {
+  cursor: pointer;
+}
+
+.dag-node rect {
+  fill: var(--bg-raised);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  rx: 4;
+}
+
+.dag-node[data-tone="ok"] rect {
+  stroke: var(--tone-ok-line);
+}
+.dag-node[data-tone="busy"] rect {
+  stroke: var(--tone-busy-line);
+}
+.dag-node[data-tone="bad"] rect {
+  stroke: var(--tone-bad-line);
+}
+.dag-node[data-tone="warn"] rect {
+  stroke: var(--tone-warn-line);
+}
+
+.dag-node[aria-selected="true"] rect {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.dag-node:hover rect {
+  fill: var(--bg-sunken);
+}
+
+.dag-node text {
+  fill: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.dag-node text.dag-spec {
+  fill: var(--fg-faint);
+  font-family: var(--font-sans);
+  font-size: 10px;
+}
+
+.dag-node text.dag-glyph {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dag-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  margin-top: var(--space-2);
+}
+
+.dag-legend span.dag-swatch {
+  display: inline-block;
+  width: 1.5rem;
+  height: 0;
+  border-top: 2px solid var(--accent);
+  vertical-align: middle;
+  margin-right: var(--space-1);
+}
+
+.dag-legend span.dag-swatch[data-evidence="order"] {
+  border-top-style: dashed;
+  border-top-color: var(--border-strong);
+}
+
+/* ------------------------------------------------------- the stage list */
+
+.stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stage-row {
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.stage-row:last-child {
+  border-bottom: 0;
+}
+
+.stage-button {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: var(--space-2) var(--space-1);
+}
+
+.stage-button:hover {
+  background: var(--bg-sunken);
+}
+
+.stage-button[aria-expanded="true"] {
+  background: var(--accent-soft);
+}
+
+.stage-order {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+}
+
+.stage-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.stage-spec {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  color: var(--fg-faint);
+}
+
+.stage-rows {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+}
+
+.stage-detail {
+  padding: var(--space-3) var(--space-3) var(--space-4) 3rem;
+  border-top: 1px dashed var(--border);
+  background: var(--bg-sunken);
+}
+
+.stage-detail h4 {
+  margin-top: var(--space-3);
+}
+
+.stage-detail section {
+  margin-bottom: var(--space-3);
+}
+
+/* --------------------------------------------------------- run monitor */
+
+.monitor-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  align-items: start;
+}
+
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+}
+
+.stat {
+  min-width: 6rem;
+}
+
+.stat-value {
+  display: block;
+  font-size: var(--fs-xl);
+  font-family: var(--font-mono);
+  line-height: 1.1;
+}
+
+.stat-label {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat[data-tone="bad"] .stat-value {
+  color: var(--tone-bad-fg);
+}
+.stat[data-tone="busy"] .stat-value {
+  color: var(--tone-busy-fg);
+}
+
+/* ---------------------------------------------------------- the launcher */
+
+.launcher-locked {
+  border: 1px dashed var(--tone-unknown-line);
+  background: var(--tone-unknown-bg);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.gate-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gate {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.gate:last-child {
+  border-bottom: 0;
+}
+
+.gate-glyph {
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.gate[data-passed="true"] .gate-glyph {
+  color: var(--tone-ok-fg);
+}
+
+.gate[data-passed="false"] .gate-glyph {
+  color: var(--tone-warn-fg);
+}
+
+.gate-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.gate-detail {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.phrase-input {
+  font-family: var(--font-mono);
+  min-width: 18rem;
+}
+
+.phrase-exact {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+
+/* ------------------------------------------------------------ provenance */
+
+.proof-panel {
+  border: 2px solid var(--power-line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.proof-value {
+  font-size: var(--fs-xl);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.proof-value[data-reported="false"] {
+  color: var(--tone-unknown-fg);
+  font-style: italic;
+  font-weight: 600;
+}
+
+.tool-matrix td.tool-name {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tool-matrix .tool-absent {
+  color: var(--tone-unknown-fg);
+  font-style: italic;
+}
+
+.digest-table td.digest-hash {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.snapshot-pre {
+  max-height: 28rem;
+}
+
+.gap-list {
+  list-style: disc;
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+}

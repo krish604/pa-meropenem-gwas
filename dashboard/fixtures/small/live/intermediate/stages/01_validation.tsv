@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	assembly_size	contig_count	n50	n90	largest_contig	gc_content	ambiguous_bases	basic_quality_status	species_confirmation	contamination_status	completeness_status	duplicate_status	flag_reasons
+TEST_PA_001	assembly_size_00	contig_count_00	n50_00	n90_00	largest_contig_00	gc_content_00	ambiguous_bases_00	pass	confirmed	clean	complete	unique	none
+TEST_PA_002	assembly_size_01	contig_count_01	n50_01	n90_01	largest_contig_01	gc_content_01	ambiguous_bases_01	pass	confirmed	clean	complete	unique	none
+TEST_PA_003	assembly_size_02	contig_count_02	n50_02	n90_02	largest_contig_02	gc_content_02	ambiguous_bases_02	pass	confirmed	clean	complete	unique	none
+TEST_PA_004	assembly_size_03	contig_count_03	n50_03	n90_03	largest_contig_03	gc_content_03	ambiguous_bases_03	pass	confirmed	clean	complete	unique	none
+TEST_PA_005	assembly_size_04	contig_count_04	n50_04	n90_04	largest_contig_04	gc_content_04	ambiguous_bases_04	pass	confirmed	clean	complete	unique	none
+TEST_PA_006	assembly_size_05	contig_count_05	n50_05	n90_05	largest_contig_05	gc_content_05	ambiguous_bases_05	pass	confirmed	clean	complete	unique	none
+TEST_PA_007	assembly_size_06	contig_count_06	n50_06	n90_06	largest_contig_06	gc_content_06	ambiguous_bases_06	pass	confirmed	clean	complete	unique	none
+TEST_PA_008	assembly_size_07	contig_count_07	n50_07	n90_07	largest_contig_07	gc_content_07	ambiguous_bases_07	pass	confirmed	clean	complete	unique	none
+TEST_PA_009	assembly_size_08	contig_count_08	n50_08	n90_08	largest_contig_08	gc_content_08	ambiguous_bases_08	pass	confirmed	clean	complete	unique	none
+TEST_PA_010	assembly_size_09	contig_count_09	n50_09	n90_09	largest_contig_09	gc_content_09	ambiguous_bases_09	pass	confirmed	clean	complete	unique	none

@@ -1,0 +1,29 @@
+# Pinned tool and database references.
+# EDITABLE REFERENCE TABLE - the reproducibility contract.
+#
+# Every analysis run records tool, version, database and database_version.
+# Databases are NOT downloaded or updated implicitly during a run
+# (config: analysis.*.allow_database_update is false everywhere).
+# `version` is a deliberate placeholder that MUST be set to the real pinned
+# version before any REAL-mode run. `version_status=unpinned` is detected and
+# reported by the provenance stage; it is never silently treated as pinned.
+#
+# reference_id	: stable identifier used in provenance records
+# tool           : executable or package name
+# tool_version   : pinned version string ("UNPINNED" is a reported failure, not a pass)
+# database       : reference database name
+# database_version : pinned database release
+# version_status : pinned | unpinned
+# source         : how the reference is obtained
+# notes          : caveats
+reference_id	tool	tool_version	database	database_version	version_status	source	notes
+ref_bakta	bakta	1.12.1	BaktaDB	6.0 (light, 2025-02-24)	pinned	zenodo:10.5281/zenodo.14916843	Annotation backend. `bakta_db list` reports 6.0/2025-02-24 as the only available release, and this is the edition the pilot used (docs/pilot100_pipeline_steps.md) and that 07-bakta-optimization.md, 05-cli-design.md and benchmark/bakta10.py assume. THE EDITION IS ENCODED IN database_version because the reference schema has no column for light-vs-full - a real gap, since a reader cannot otherwise tell a species-specific light database from a full one. Provision with: bakta_db download --type light --output db/bakta_db. Note this bundles AMRFinderPlus 2024-12-18.1, which AMRFinderPlus 4.2.7 rejects; bakta_db download repoints db-light/amrfinderplus-db/latest at a complete 2026-08-07.1, resolving the conflict in 07-bakta-optimization.md.
+ref_amrfinderplus	amrfinder	4.2.7	AMRFinderPlus	2026-08-07.1	pinned	ftp://ftp.ncbi.nlm.nih.gov/pathogen/Antimicrobial_resistance/AMRFinderPlus/database/4.2/2026-08-07.1	Stage 4 primary adapter. Provisioned out of band: fetch that exact directory, then build the BLAST index locally with makeblastdb -in AMRProt.fa -dbtype prot. Do NOT use amrfinder -u; it re-downloads `latest`, and an implicit mid-run update is what this project forbids. The pin is not cosmetic - config/gene_families.tsv maps this release's Class/Subclass vocabulary onto imipenem.
+ref_mlst_pa	mlst	2.33.1	mlst_pa	pseudomonas_aeruginosa (2026-03-11)	pinned	pubmlst_legacy_download	Typing scheme alias paeruginosa -> pseudomonas_aeruginosa is handled in config. The date is the scheme directory's own download_date, recorded because a sequence type is only reproducible against the allele set that produced it; the scheme's last_updated is 2026-03-10 and it defines 7 loci. Scheme name AND date are both in database_version because the schema has no field for either, the same gap noted on ref_bakta. Tool version pinned to the measured 2.33.1 (docs/environment-arm64.md).
+ref_vfdb	blastn	UNPINNED	VFDB	UNPINNED	unpinned	VFDB_download	Virulence database. Kept independent of the AMR stage.
+ref_card	rgi	UNPINNED	CARD	UNPINNED	unpinned	CARD_download	Optional stage 4 adapter, disabled in config.
+ref_panaroo	panaroo	UNPINNED	panaroo_Pa_pseudomonas_pep_schemes	UNPINNED	unpinned	panaroo_data	Pan-genome graph and core alignment.
+ref_snp_sites	snp-sites	UNPINNED	NA	NA	na	panaroo	Core SNP alignment from the Panaroo core gene alignment.
+ref_iqtree2	iqtree2	UNPINNED	NA	NA	na	iqtree	Maximum likelihood tree.
+ref_pyseer	pyseer	UNPINNED	NA	NA	na	pyseer	GWAS engine. No database.
+ref_reference_genome	NA	NA	PAO1_reference	GCF_000006765.1 ASM676v1 (NC_002516.2)	pinned	https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/006/765/GCF_000006765.1_ASM676v1 (fetched 2026-10-02)	Assembly GCF_000006765.1 version ASM676v1 (refseq NC_002516.2), 6,264,404 bp. FASTA and GFF are the SAME assembly release and were verified to match: the GFF's ##sequence-region is 'NC_002516.2 1 6264404' and the FASTA's .fai reports NC_002516.2 at 6264404 bp. Both checks were run before any coordinate from the GFF was trusted, because a silently mismatched assembly shifts every annotated gene boundary and is invisible until the biology is wrong (the failure mode a0e8bdd was written to catch for the FASTA). The GFF is used by stage 6 to resolve PAO1-coordinate variants to genes: stage 6 calls against this reference, so its coordinates are reference coordinates, NOT the assembly-local contigs Bakta reports for the cohort's own assemblies. Provisioned with: curl -sL <dir>GCF_000006765.1_ASM676v1_genomic.gff.gz then gunzip. GFF is not committed (db/ is gitignored); re-fetch with this URL and re-run both checks. Date fetched recorded here because the schema has no column for it, the same gap noted on ref_bakta and ref_mlst_pa.

@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	gene	variant	variant_type	position	reference	alternate	effect	mechanism	confidence	evidence_source	call_status
+TEST_PA_001	oprD	SYNTHETIC_OPRD_FRAMESHIFT_001	FRAMESHIFT	412	SYN	SYN	frameshift_truncates_coding_sequence	reduced_permeability	SYNTHETIC	synthetic_variant_emulator	DETECTED
+TEST_PA_002	oprD	SYNTHETIC_OPRD_GENE_ABSENCE_001	GENE_ABSENCE	412	SYN	SYN	locus_absent	reduced_permeability	SYNTHETIC	synthetic_variant_emulator	DETECTED
+TEST_PA_003	synthetic_gene		snv	3	A	G	synthetic	antibiotic inactivation	high	synthetic	called
+TEST_PA_004	synthetic_gene		snv	4	A	G	synthetic	antibiotic inactivation	high	synthetic	called
+TEST_PA_005	mexZ	SYNTHETIC_mexZ_V1	SNV	135	A	T	synthetic_effect	efflux	SYNTHETIC	synthetic_variant_emulator	DETECTED
+TEST_PA_006	synthetic_gene		snv	6	A	G	synthetic	antibiotic inactivation	high	synthetic	called
+TEST_PA_007	oprD	SYNTHETIC_OPRD_FRAMESHIFT_001	FRAMESHIFT	412	SYN	SYN	frameshift_truncates_coding_sequence	reduced_permeability	SYNTHETIC	synthetic_variant_emulator	DETECTED
+TEST_PA_008	synthetic_gene		snv	8	A	G	synthetic	antibiotic inactivation	high	synthetic	called
+TEST_PA_009	oprD	SYNTHETIC_OPRD_GENE_DISRUPTION_001	GENE_DISRUPTION	412	SYN	SYN	disrupted_by_insertion	reduced_permeability	SYNTHETIC	synthetic_variant_emulator	DETECTED
+TEST_PA_010	synthetic_gene		snv	10	A	G	synthetic	antibiotic inactivation	high	synthetic	called

@@ -1,0 +1,20 @@
+##fileformat=VCFv4.2
+##source=test_fixture
+##contig=<ID=TESTCHR,length=20000>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Raw read depth">
+##INFO=<ID=AC,Number=A,Type=Integer,Description="Allele count">
+##INFO=<ID=AN,Number=1,Type=Integer,Description="Total number of alleles">
+##INFO=<ID=DP4,Number=4,Type=Integer,Description="ref/alt fwd/rev">
+##INFO=<ID=MQ,Number=1,Type=Float,Description="RMS mapping quality">
+##INFO=<ID=MQ0F,Number=1,Type=Float,Description="Fraction of reads at MAPQ 0">
+##FILTER=<ID=PASS,Description="All filters passed">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Genotype likelihoods">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	TEST_PA_001_asm1
+TESTCHR	500	.	A	T	42.1	PASS	DP=8;AC=2;AN=2;DP4=4,0,4,0;MQ=60;MQ0F=0	GT:PL:DP:AD	1/1:60,0,0:8:0,8
+TESTCHR	600	.	A	T	42.1	PASS	DP=8;AC=2;AN=2;DP4=4,0,4,0;MQ=60;MQ0F=0	GT:PL:DP:AD	1/1:60,0,0:8:0,8
+TESTCHR	602	.	A	T,G	42.1	PASS	DP=8;AC=2;AN=2;DP4=4,0,4,0;MQ=60;MQ0F=0	GT:PL:DP:AD	1/1:60,0,0:8:0,8
+TESTCHR	700	.	A	T	42.1	PASS	DP=8;AC=2;AN=2;DP4=4,0,4,0;MQ=60;MQ0F=0	GT:PL:DP:AD	1/1:60,0,0:8:0,8

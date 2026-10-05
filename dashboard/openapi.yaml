@@ -1,0 +1,1890 @@
+openapi: 3.1.0
+info:
+  title: PA AMR results dashboard API
+  version: "0.1.0-phase0"
+  summary: Read-only HTTP surface for a Pseudomonas aeruginosa imipenem AMR pipeline run.
+  description: |
+    Phase 0 contract. Every endpoint is read-only except the two launcher
+    endpoints, and `POST /api/launcher/preflight` starts nothing.
+
+    ## Provenance and honesty rules that the schemas enforce
+
+    * `NotProduced` is returned wherever an artefact is absent. Absence is never
+      rendered as a zero, an empty list or a blank cell. `docs/scientific_rules.md`
+      rule 9 and `papipeline/stages/report_tables.py` both require this, and
+      `TableRead.reason` is the sentence saying which.
+    * A header-only table is `not produced`, never an empty result. Every stage
+      contract requires `min_rows(table, 1)` (`contracts.py:247`).
+    * Every list response carries `total`, computed over the whole declared
+      artefact before paging, and `basis.n`, the number of isolates the
+      statistic was computed on. The client never aggregates across a page.
+    * Every list response carries `basis`, so a displayed number always arrives
+      with the artefact it came from.
+
+    ## Stage names
+
+    `name` is the code stage name from `papipeline/run.py:130 STAGE_ORDER` and is
+    what `run_manifest.json`, the event log and every table key use. `spec_name`
+    and `spec_number` carry the `.scratch/imipenem-gwas-dashboard/spec.md` D1
+    name and row, which differ for four stages (`validation`/`validate`,
+    `annotation`/`annotate`, `cooccurrence`/`combination`, `reporting`/`report`).
+
+    ## State vocabulary
+
+    Six badges, and the badge is the single source of truth for the wording:
+    `completed`, `running`, `failed`, `refused`, `not_assessed`, `not_run`.
+    Every state except `completed` and `running` carries a non-empty `reason`.
+servers:
+  - url: http://127.0.0.1:8787
+    description: |
+      Loopback only. The server refuses to start on a non-loopback host unless
+      PA_DASH_TOKEN is set, and always refuses 0.0.0.0. Reach it over an SSH
+      tunnel. The host is read from configuration, never hard-coded; 8787 is the
+      documented default.
+tags:
+  - name: run
+    description: Run summary, mode, cohort.
+  - name: stages
+    description: The 16 canonical stages and their output tables.
+  - name: tables
+    description: Folded-step and Snakefile-declared tables.
+  - name: isolates
+    description: The joined per-isolate table and per-isolate detail.
+  - name: viz
+    description: Tree, similarity matrix, GWAS, convergence, co-occurrence.
+  - name: oprd
+    description: oprD locus verdicts. See the not-produced note on the endpoint.
+  - name: provenance
+    description: Tool versions, references, digests, logs, config snapshot.
+  - name: reports
+    description: Report listing and safe file serving.
+  - name: events
+    description: SSE stream and its polling fallback.
+  - name: launcher
+    description: Launcher capability and status. Starts nothing in Phase 0.
+
+security:
+  - {}
+
+paths:
+  /api/health:
+    get:
+      tags: [run]
+      summary: Liveness, and which results source was opened.
+      operationId: getHealth
+      responses:
+        "200":
+          description: The server is up and a results source is open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: |
+            No results source could be opened. `probes` names EVERY path tried,
+            in order, each with why it failed. Probes that failed for want of
+            configuration are distinguished from probes whose directory exists
+            and holds nothing.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NoResultsSource" }
+
+  /api/run:
+    get:
+      tags: [run]
+      summary: Run summary.
+      operationId: getRun
+      responses:
+        "200":
+          description: |
+            `manifest_writer` is `run` when the manifest carries a `stages` key
+            (`papipeline/run.py:2464`) and `provenance` when it does not
+            (`scripts/common/write_provenance.py:101`). The two writers produce
+            different schemas; `manifest_gaps` names what this one lacks.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunSummary" }
+
+  /api/run/counts:
+    get:
+      tags: [run]
+      summary: Aggregate counts for the metric cards.
+      operationId: getRunCounts
+      responses:
+        "200":
+          description: Counts, each with the artefact it was computed over.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunCounts" }
+
+  /api/stages:
+    get:
+      tags: [stages]
+      summary: All 16 stages, in STAGE_ORDER, with state and reason.
+      operationId: listStages
+      responses:
+        "200":
+          description: |
+            Always 16 entries, in `papipeline/run.py:130 STAGE_ORDER`, which is
+            also EXECUTION_ORDER. Absent from `run_manifest.stages` is
+            `not_run`, with the reason saying which of the three absences it is.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stage_order, items]
+                properties:
+                  stage_order:
+                    type: array
+                    minItems: 16
+                    maxItems: 16
+                    items: { type: string }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Stage" }
+
+  /api/stages/{stage}:
+    get:
+      tags: [stages]
+      summary: "One stage: contract header, actual header, drift, events."
+      operationId: getStage
+      parameters:
+        - $ref: "#/components/parameters/StageName"
+      responses:
+        "200":
+          description: The stage, with a header cross-check.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StageDetail" }
+        "404":
+          $ref: "#/components/responses/UnknownStage"
+
+  /api/stages/{stage}/rows:
+    get:
+      tags: [stages]
+      summary: Paged rows of a stage's principal table.
+      operationId: listStageRows
+      parameters:
+        - $ref: "#/components/parameters/StageName"
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Columns"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: |
+            `present: false` with a `reason` when the table is absent, empty or
+            header-only. `read_tsv` refuses all three, and every stage contract
+            requires at least one row, so all three are reported as not produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StageRows" }
+        "400":
+          $ref: "#/components/responses/BadSortOrColumn"
+        "404":
+          $ref: "#/components/responses/UnknownStage"
+
+  /api/tables/{key}:
+    get:
+      tags: [tables]
+      summary: |
+        Paged rows of a folded-step table (structural_variants, regulators,
+        mechanisms, master_table) or a path the Snakefile declares and
+        contracts.py does not (gene_presence_absence, core_genes,
+        accessory_genes, alignment_summary).
+      operationId: listTable
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Columns"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: "The table, or `present: false` with a reason."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StageRows" }
+        "404":
+          $ref: "#/components/responses/UnknownTable"
+
+  /api/isolates:
+    get:
+      tags: [isolates]
+      summary: The joined per-isolate table.
+      operationId: listIsolates
+      description: |
+        One row per `sample_id` in the manifest, or in the union of the
+        per-sample tables when no manifest is readable, with `membership_source`
+        naming which.
+
+        A sample present in one table and absent from another STILL gets a row.
+        Cells with no source read `not assessed` - never 0, never blank. An
+        `amr_genes` of `[]` from a present table is a measurement of zero; a
+        missing row is `not_assessed`, and the two are different answers.
+
+        `n_snv` and `n_indel` come from `variants_provenance.json`, where every
+        key is present at zero when the file exists. When the file is absent
+        they are `not_assessed`, because "called nothing" and "never screened"
+        must not look alike.
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Columns"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: A page of isolates, with the unfiltered total.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IsolatePage" }
+
+  /api/isolates/{sample_id}:
+    get:
+      tags: [isolates]
+      summary: Every contributing row for one isolate.
+      operationId: getIsolate
+      parameters:
+        - name: sample_id
+          in: path
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 128 }
+      responses:
+        "200":
+          description: |
+            Each contributing table appears even when absent, with `present`
+            false and a reason, so the page can say which tables had nothing for
+            this isolate and which had nothing at all.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IsolateDetail" }
+        "404":
+          $ref: "#/components/responses/UnknownIsolate"
+
+  /api/oprd:
+    get:
+      tags: [oprd]
+      summary: oprD locus verdicts, or the reason there are none.
+      operationId: getOprd
+      description: |
+        **There is no contracted file for these verdicts.**
+        `papipeline/stages/reporting.py` `OPRD_NOT_ON_DISK` states it:
+        `contracts.py` declares no oprD table in `STAGE_TABLES` or
+        `INTERNAL_TABLES`, `workflow/Snakefile` declares no oprD output, and
+        `run.py`'s in-memory `oprd_locus_resolution` is the only copy.
+
+        The endpoint therefore probes, in order, and returns `probes` naming
+        every path tried. When none yields verdicts the response is
+        `available: false` with the quoted reason.
+
+        It must NOT fall back to the master table's `chromosomal_mutation`
+        column or to `viz.oprd_status_per_sample`. On the ten-isolate cohort that
+        function reported `absent` for 8 isolates that all carry the gene: 34 of
+        the 36 `gene=oprD` CDS features are OprD/OprP/OprQ paralogs, and 8 of 10
+        carry the true locus unlabelled. Surfacing that as a verdict would
+        manufacture the study's central negative.
+
+        Verdicts are refused by name and never collapse to `absent`
+        (`adapters/oprd_locus.py:93`). Only `resolved` asserts the locus is
+        present; every `refused:*` maps to the display state `not_assessed`.
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: Verdicts, or the absence with the probes named.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OprdResponse" }
+
+  /api/pangenome:
+    get:
+      tags: [tables]
+      summary: Pangenome summary plus the three gene-table counts.
+      operationId: getPangenome
+      responses:
+        "200":
+          description: |
+            `pangenome_summary.tsv` is `metric`/`value`, so it is returned as
+            pairs, not as columns. The three gene tables are declared by
+            `workflow/Snakefile:265-267` and are counted, not paged: a 900-isolate
+            presence/absence table is 200,000 rows and the counts are what the
+            page shows.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Pangenome" }
+
+  /api/tree:
+    get:
+      tags: [viz]
+      summary: The stage-9 tree as structural JSON.
+      operationId: getTree
+      description: |
+        `node_id` is the node's **postorder index** from the root, assigned
+        server-side by one depth-first pass, children left to right
+        (UI-D6). It is a position in this file, not a biological identity, and
+        `identity` says so.
+
+        The Newick internal label is never an identity. In
+        `test_data/similarity/real_tree.nwk` the internal labels are `100/100`
+        three times over, plus `99.9/92`, `100/92`, `83.4/88`, `99/100`, and one
+        node with no label at all.
+
+        The parse passes `preserve_underscores=True`. dendropy's default is
+        `False`, and with the default every `TEST_PA_001` comes back as
+        `TEST PA 001`, which silently breaks the `sample_id` join on every page.
+
+        `tip_check` reports the same set difference `phylogeny.validate_tree_samples`
+        reports, rather than drawing a tree whose tips cannot be joined.
+      parameters:
+        - name: source
+          in: query
+          description: Which tree to read.
+          schema:
+            type: string
+            enum: [stage9, gubbins, all]
+            default: stage9
+      responses:
+        "200":
+          description: "The tree, or `present: false` with a reason."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tree" }
+        "503":
+          $ref: "#/components/responses/NoResultsSource"
+
+  /api/tree/tips:
+    get:
+      tags: [viz]
+      summary: Paged tip metadata.
+      operationId: listTreeTips
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Columns"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: A page of tips, keyed on `node_id`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TipPage" }
+
+  /api/similarity:
+    get:
+      tags: [viz]
+      summary: The patristic distance matrix, downsampled above 300 tips.
+      operationId: getSimilarity
+      description: |
+        Above `max_tips` (300) the server subsamples and says so in
+        `downsampled` plus a `method` string. It never silently truncates:
+        `n_total` and `n_shown` are both returned.
+
+        `units` is `similarity.units.json` passed through unmodified
+        (`quantity`, `definition`, `is_a_snp_count: false`). The matrix is
+        expected substitutions per site and is NOT a SNP count; `docs/scientific_rules.md`
+        rule 11 makes that a claim about what may be written down. When the
+        sidecar is absent `units` is null and the UI says the units are not
+        recorded - it does not assume them.
+      parameters:
+        - name: max_tips
+          in: query
+          schema: { type: integer, minimum: 10, maximum: 2000, default: 300 }
+      responses:
+        "200":
+          description: "The matrix, or `present: false` with a reason."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Similarity" }
+
+  /api/gwas:
+    get:
+      tags: [viz]
+      summary: The association table, and the arrays the QQ plot needs.
+      operationId: listGwas
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Columns"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: |
+            `n_tests` is the row count, from which the QQ plot derives its
+            expected quantiles server-side. `model` is shown verbatim: every
+            reference-engine result is stamped
+            `reference_fisher:NO_KINSHIP_CORRECTION`, and a p-value that omits
+            that stamp is not one this pipeline produced.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GwasPage" }
+
+  /api/gwas/top:
+    get:
+      tags: [viz]
+      summary: Top hits by adjusted p-value, with lineage-confound flags.
+      operationId: getGwasTop
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 25 }
+      responses:
+        "200":
+          description: |
+            `lineage_linked` marks a feature carried only by samples of one
+            lineage. Such a feature is RELABELLED, never deleted, and never
+            presented as a resistance determinant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GwasTop" }
+
+  /api/convergence:
+    get:
+      tags: [viz]
+      summary: Convergence classifications, in their evaluated order.
+      operationId: listConvergence
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Columns"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: |
+            The five categories are mutually exclusive and evaluated in a fixed
+            order: `widespread_background`, `rare_isolated`, `lineage_associated`,
+            `recurrent_convergent`, `unknown`. A pattern in the data is not a
+            demonstration of a shared selective cause.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConvergencePage" }
+
+  /api/cooccurrence:
+    get:
+      tags: [viz]
+      summary: Feature pairs co-occurring more than expected.
+      operationId: listCooccurrence
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Q"
+        - $ref: "#/components/parameters/Columns"
+        - $ref: "#/components/parameters/Filter"
+      responses:
+        "200":
+          description: |
+            `interpretation_limit` is rendered beside every pair. Co-occurrence
+            is association only and is never presented as an interaction.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CooccurrencePage" }
+
+  /api/provenance:
+    get:
+      tags: [provenance]
+      summary: Tool versions, references, config snapshot, disk and load.
+      operationId: getProvenance
+      responses:
+        "200":
+          description: |
+            `references` has one row shape from `build_provenance`
+            (`papipeline/run.py:1607`) under either manifest writer.
+            `unpinned_references` is reported as a failure, not a silent pass.
+            `bakta_executions` is the count of times the tool was invoked, which
+            the annotation-reuse path can make fewer than the number of isolates;
+            when neither the manifest nor the reuse record carries it the field
+            is `not_reported`, never 0.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Provenance" }
+
+  /api/provenance/bakta:
+    get:
+      tags: [provenance]
+      summary: Annotation-reuse provenance and the Bakta execution count.
+      operationId: getBaktaProvenance
+      responses:
+        "200":
+          description: |
+            Reuse is the reason the count can be lower than the cohort size.
+            The reuse record is what makes the count checkable, so it is returned
+            with it rather than beside it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BaktaProvenance" }
+
+  /api/provenance/logs:
+    get:
+      tags: [provenance]
+      summary: Tripwire and watcher log tails.
+      operationId: getProvenanceLogs
+      parameters:
+        - name: name
+          in: query
+          schema: { type: string, enum: [tripwire, watcher, any] , default: any }
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - name: tail_lines
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 500 }
+      responses:
+        "200":
+          description: |
+            No log path is contracted anywhere, so an absent log is
+            `present: false` with the probes named, never an empty log that
+            reads as "nothing was reported".
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogPage" }
+
+  /api/provenance/digests:
+    get:
+      tags: [provenance]
+      summary: SHA-256 of each stage artefact.
+      operationId: getDigests
+      responses:
+        "200":
+          description: One digest per readable artefact, with its size and mtime.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DigestList" }
+
+  /api/reports:
+    get:
+      tags: [reports]
+      summary: Report files available under the opened root.
+      operationId: listReports
+      responses:
+        "200":
+          description: |
+            Discovered by extension, not by name, so a bundle that renames its
+            report still lists it. Only `.md`, `.html` and the extensions in
+            `allowlist` are returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportList" }
+
+  /api/reports/content:
+    get:
+      tags: [reports]
+      summary: One report's text, contained under the opened root.
+      operationId: getReportContent
+      security:
+        - paDashToken: []
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: |
+            Relative to the opened results root. The path is `resolve()`d - which
+            follows every symlink - and then required to be under the root, so a
+            traversal that never mentions `..` fails just as a traversal that
+            does. `text/html` is served with `Content-Disposition: attachment`
+            and `X-Content-Type-Options: nosniff`, so a report's own markup
+            cannot execute in the dashboard's origin.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The file's text.
+          content:
+            text/plain:
+              schema: { type: string }
+        "400":
+          description: The path escaped the opened results root.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: The suffix is not on the allowlist.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: No such file under the root.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/events:
+    get:
+      tags: [events]
+      summary: Server-sent events from status/events.jsonl.
+      operationId: streamEvents
+      description: |
+        The dashboard's single event source is `status/events.jsonl`, written by
+        `scripts/emit.py`. The observatory's in-process EventBus is NOT read: it
+        lives in the runner's process and its store upserts on
+        `(run_key, stage, subject)` while `run.py:370` passes `subject=""`, so
+        it holds 16 rows for a 900-isolate run rather than the ~14,400 cells the
+        grid needs.
+
+        Frame order is `retry`, then a full `snapshot`, then `delta` frames
+        batched on a 100 ms timer. `id:` carries the byte offset, so
+        `Last-Event-ID` resumes exactly. A comment heartbeat every 15 s keeps an
+        idle run from looking dead.
+
+        **A line that is not valid JSON, or that is missing a field, or that
+        carries a fifth field or a fourth `event` value, is skipped with a
+        warning naming its line number.** The stream does not die and does not
+        coerce. A run killed mid-write leaves a replayable log, because every
+        record is `flush()`ed and `fsync()`ed (`emit.py:110`).
+      responses:
+        "200":
+          description: An open event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+              examples:
+                stream:
+                  value: |
+                    retry: 2000
+
+                    event: snapshot
+                    id: 0
+                    data: {"transport":"sse","cursor":0,"stages":[...],"totals":{...}}
+
+                    event: delta
+                    id: 4096
+                    data: {"t":"2026-10-05T09:00:00Z","event":"done","stage":"mlst","sample":"TEST_PA_001"}
+
+                    : heartbeat
+
+        "503":
+          $ref: "#/components/responses/NoResultsSource"
+
+  /api/events/state:
+    get:
+      tags: [events]
+      summary: Polling fallback for the event stream.
+      operationId: getEventsState
+      description: |
+        Returns the same state the SSE `snapshot` frame carries. The client
+        reaches this endpoint when the stream has not opened within 3 s, and
+        declares `transport: "poll"` when it succeeds and
+        `transport: "none"` when it does not. In the `none` case the UI shows
+        "event stream unavailable: <reason>" - never an empty log, because an
+        empty log reads as "nothing has happened".
+      parameters:
+        - name: cursor
+          in: query
+          description: Byte offset the caller already holds.
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: The state snapshot and the new cursor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EventState" }
+        "503":
+          $ref: "#/components/responses/NoResultsSource"
+
+  /api/launcher/capabilities:
+    get:
+      tags: [launcher]
+      summary: What the launcher may legally do from here.
+      operationId: getLauncherCapabilities
+      responses:
+        "200":
+          description: |
+            Phase 0 starts nothing. `can_launch` is false and `reason` says why.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LauncherCapabilities" }
+
+  /api/launcher/status:
+    get:
+      tags: [launcher]
+      summary: Whether a run is in progress, and the observed timings.
+      operationId: getLauncherStatus
+      responses:
+        "200":
+          description: |
+            `per_isolate_timings` is an OBJECT when a runbook supplied them and
+            `null` otherwise - never a per-isolate estimate invented from the
+            cohort size. With it null the UI reads "timings not recorded".
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LauncherStatus" }
+
+  /api/launcher/preflight:
+    post:
+      tags: [launcher]
+      summary: Dry-run checks. Starts nothing.
+      operationId: postLauncherPreflight
+      security:
+        - paDashToken: []
+      description: |
+        Phase 0: this endpoint checks and reports. It does not execute, and it
+        does not accept a command. Which command a launch would run is Phase 1's
+        decision and must not be inferred from the pipeline's CLI here.
+      responses:
+        "200":
+          description: The checks, each passed or failed with its reason.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Preflight" }
+
+components:
+  securitySchemes:
+    paDashToken:
+      type: apiKey
+      in: header
+      name: X-PA-Dash-Token
+      description: |
+        Required only when the server is bound to a non-loopback host, which it
+        refuses to do without this being set. Never accepted as a query
+        parameter: a query string lands in shell history, in the address bar and
+        in every proxy log. Compared with a constant-time comparison.
+
+  parameters:
+    StageName:
+      name: stage
+      in: path
+      required: true
+      description: A stage name from `papipeline/run.py:130 STAGE_ORDER`.
+      schema: { $ref: "#/components/schemas/StageName" }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    Limit:
+      name: limit
+      in: query
+      description: Clamped server-side; the clamp is reported in `limit_applied`.
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+    Sort:
+      name: sort
+      in: query
+      description: |
+        `<column>` ascending or `-<column>` descending. An unknown column is a
+        `400` naming the column, never a silent fallback to the declared order -
+        a sort that quietly did not apply looks like a sort.
+      schema: { type: string }
+    Q:
+      name: q
+      in: query
+      description: Substring over the endpoint's declared searchable columns.
+      schema: { type: string }
+    Columns:
+      name: columns
+      in: query
+      description: Comma-separated projection. Unknown column is a 400.
+      schema: { type: string }
+    Filter:
+      name: filter
+      in: query
+      description: |
+        Repeated `filter.<column>=<value>`, exact match. `filter.<column>__ne`,
+        `__in` (comma-separated) and `__null` (`1`/`0`) are also accepted. An
+        unknown column is a 400.
+      schema: { type: string }
+      explode: true
+
+  responses:
+    NoResultsSource:
+      description: |
+        No results source could be opened. `probes` names EVERY path tried, in
+        order, each with why it failed.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/NoResultsSource" }
+    UnknownStage:
+      description: |
+        Not a stage in STAGE_ORDER. The error names the stage and the 16 that
+        exist, because a typo'd stage name must not read as a stage that did not
+        run.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UnknownTable:
+      description: |
+        Not a table this pipeline declares. The reason quotes
+        `report_tables._absent`, which says the path is undeclared rather than
+        absent from disk - the two are different facts.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UnknownIsolate:
+      description: No such sample_id in the manifest or in any per-sample table.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadSortOrColumn:
+      description: Unknown sort column, unknown projection column or unknown filter column.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    StageName:
+      type: string
+      description: |
+        One of the 16 in `papipeline/run.py:130 STAGE_ORDER`. Four differ from
+        the spec.md D1 name: `validation`/`validate`, `annotation`/`annotate`,
+        `cooccurrence`/`combination`, `reporting`/`report`.
+      enum:
+        - validation
+        - annotation
+        - mlst
+        - amr
+        - virulence
+        - variants
+        - cohort_variants
+        - pangenome
+        - recombination
+        - phylogeny
+        - similarity
+        - phenotype
+        - gwas
+        - convergence
+        - cooccurrence
+        - reporting
+
+    StageState:
+      type: string
+      description: |
+        The badge vocabulary, and the single source of truth for the wording. No
+        page composes a status sentence itself. `not_assessed` and `not_run` are
+        kept apart on purpose: a stage that ran and produced nothing answerable
+        is not a stage that never ran.
+      enum: [completed, running, failed, refused, not_assessed, not_run]
+
+    VerdictValue:
+      type: string
+      description: |
+        An absent observation is rendered as a named state, never as a value.
+        `not assessed` is what a missing source or a refusal maps to. A present
+        table holding no row for a sample is a list of length zero, which is a
+        different answer.
+      oneOf:
+        - $ref: "#/components/schemas/NotAssessed"
+        - type: string
+        - type: number
+        - type: boolean
+        - type: array
+          items: { type: string }
+        - type: "null"
+
+    NotAssessed:
+      type: string
+      const: not assessed
+      description: |
+        The literal the UI renders. Distinct from `not_run` (the stage never ran)
+        and from `not produced` (the artefact does not exist).
+
+    NotProduced:
+      type: string
+      const: not produced
+      description: |
+        The literal for an artefact that is not there. Carries `reason`, because
+        `not produced` without a reason is indistinguishable from a stage that
+        was never built.
+
+    Basis:
+      type: object
+      description: |
+        Attached to every statistic. The client never aggregates across a page,
+        and the D3 power flag takes its `n` from `basis.n` rather than from the
+        cohort size the page was told about.
+      required: [n, artefact]
+      properties:
+        n:
+          type: integer
+          minimum: 0
+          description: Isolates this statistic was actually computed on.
+        artefact:
+          type: string
+          description: Stage or table key the statistic came from.
+        path:
+          type: string
+          description: Realpath of the file read.
+        rows_total:
+          type: integer
+          minimum: 0
+        filtered:
+          type: boolean
+          description: |
+            True when a filter narrowed the input. The power flag must use the
+            filtered `n`, and must say so.
+        min_samples:
+          type: integer
+          minimum: 1
+          description: |
+            The configured minimum cohort (`gwas.min_samples_per_group`), carried
+            so the D3 flag can fire without the client knowing the setting.
+        underpowered:
+          type: boolean
+          description: |
+            `n < min_samples`. The one thing that decides whether the R16 flag
+            reads "underpowered"; the flag string follows it.
+
+    PageMeta:
+      type: object
+      required: [total, offset, limit]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: |
+            Count over the whole declared artefact, computed before paging. The
+            number shown beside a page - never `items.length`.
+        total_unfiltered:
+          type: integer
+          minimum: 0
+          description: Present when a filter is active, so "12 of 900" is sayable.
+        offset: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        limit_applied:
+          type: integer
+          description: The limit after clamping. Present only when it was clamped.
+        sort:
+          type: string
+          nullable: true
+        filters:
+          type: object
+          additionalProperties: true
+        basis:
+          $ref: "#/components/schemas/Basis"
+
+    TableRead:
+      type: object
+      description: |
+        The shape of every table read, adopted from
+        `papipeline/stages/report_tables.TableRead`. `present` is the only thing
+        a client branches on, and `rows` is empty whenever `present` is false, so
+        the two cannot drift.
+      required: [present, reason, path]
+      properties:
+        present:
+          type: boolean
+        reason:
+          type: string
+          description: |
+            Non-empty whenever `present` is false. Says which of: no file at the
+            path; present but empty; a header and no rows, which is not a result
+            because every stage contract requires at least one row; or unreadable,
+            with the contract violation named.
+        path: { type: string }
+        n_rows: { type: integer, minimum: 0 }
+
+    Health:
+      type: object
+      required: [ok, source_kind, root]
+      properties:
+        ok: { type: boolean }
+        source_kind:
+          type: string
+          enum: [live, bundle]
+          description: |
+            Decided by WHERE `run_manifest.json` was found, not by which probe
+            matched: `live` at the root, `bundle` under `02_stage_outputs/`. That
+            is what makes the bundle layout tolerant.
+        root: { type: string }
+        manifest_writer:
+          type: string
+          enum: [run, provenance, none]
+        mode:
+          type: string
+          enum: [STUB, TEST, REAL]
+        pipeline_version: { type: string }
+        state_dir: { type: string, description: Outside the results root, always. }
+        loopback:
+          type: boolean
+          description: False only on a non-loopback bind, which requires a token.
+
+    NoResultsSource:
+      type: object
+      required: [probes, message]
+      properties:
+        message:
+          type: string
+          description: The whole search, in order, in prose.
+        probes:
+          type: array
+          minItems: 1
+          description: EVERY probe tried, in order. Not only the ones that nearly matched.
+          items:
+            type: object
+            required: [n, probe, ok, reason]
+            properties:
+              n: { type: integer, minimum: 1 }
+              probe:
+                type: string
+                enum: [flag, env, bundle, live_real, live_test, live_stub]
+              path:
+                type: string
+                nullable: true
+                description: Null when the probe was not configured at all.
+              ok: { type: boolean }
+              reason:
+                type: string
+                enum:
+                  - not given
+                  - not set
+                  # A configured path that does not exist at all. Kept apart
+                  # from the two below, which describe a directory that exists:
+                  # "not found" would collapse not-configured into
+                  # configured-and-empty.
+                  - no such directory
+                  - no run_manifest.json and no intermediate/stages/
+                  - present but holds no pipeline output
+                  - matched
+
+    RunSummary:
+      type: object
+      required: [manifest_writer, stages]
+      properties:
+        manifest_writer:
+          type: string
+          enum: [run, provenance, none]
+          description: |
+            Two functions write `run_manifest.json` and their schemas differ.
+            `run` = `papipeline/run.py:2464`, which has `stages`,
+            `stages_skipped`, `outputs`, `tools_detected`, `antibiotic`.
+            `provenance` = `scripts/common/write_provenance.py:101`, which has
+            `references`, `stage_tool_requirements`, `unpinned_references`,
+            `note` and NO stage record.
+        manifest_gaps:
+          type: array
+          items: { type: string }
+          description: |
+            Keys this writer did not produce. A manifest with no `stages` key
+            does not mean sixteen stages did not run; every stage is `not_run`
+            with the reason saying the pre-run writer recorded no outcomes.
+        run_mode: { type: string, enum: [STUB, TEST, REAL] }
+        antibiotic: { type: [string, "null"] }
+        n_samples:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Null when the manifest records none, not 0.
+        generated_at_utc: { type: string }
+        pipeline_version: { type: string }
+        python: { type: string }
+        platform: { type: string }
+        banner:
+          type: string
+          description: |
+            The mode banner, verbatim from `stages/reporting.py`. A STUB or TEST
+            run must not read as an analysis.
+        stages_skipped:
+          type: object
+          additionalProperties: { type: string }
+          description: stage to reason, verbatim from `run.py:736`.
+        outputs:
+          type: object
+          additionalProperties: { type: string }
+
+    RunCounts:
+      type: object
+      description: Each count carries the artefact it was computed over.
+      properties:
+        n_stages_completed: { type: integer, minimum: 0 }
+        n_stages_failed: { type: integer, minimum: 0 }
+        n_stages_refused: { type: integer, minimum: 0 }
+        n_stages_not_run: { type: integer, minimum: 0 }
+        n_stages_not_assessed: { type: integer, minimum: 0 }
+        n_samples:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Null when unrecorded. Never 0 standing for unknown.
+        bases:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/Basis" }
+
+    Stage:
+      type: object
+      required: [name, state, reason, present, path]
+      properties:
+        name: { $ref: "#/components/schemas/StageName" }
+        spec_name:
+          type: string
+          description: The spec.md D1 name, shown beside the code name.
+        spec_number:
+          type: [integer, string, "null"]
+          description: The spec.md D1 row. `cohort_variants` is row `6a`.
+        order:
+          type: integer
+          minimum: 1
+          maximum: 16
+        state: { $ref: "#/components/schemas/StageState" }
+        reason:
+          type: string
+          description: |
+            Non-empty for every state except `completed` and `running`. Sourced
+            in this order: `stages_skipped[s]` verbatim;
+            `REAL_REFUSING_STAGES[s]` verbatim; the TableRead reason; the
+            explaining `fail` event; and only last
+            "absent from run_manifest.stages and no event explains it".
+        present: { type: boolean }
+        path: { type: string }
+        n_rows:
+          type: [integer, "null"]
+          minimum: 0
+          description: Null when the table is absent, not 0.
+        declared_columns:
+          type: array
+          items: { type: string }
+          description: From `contracts.py`. Advisory.
+        internal_tables:
+          type: array
+          description: The folded steps this stage owns, from `INTERNAL_TABLES`.
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              path: { type: string }
+              owner: { type: string }
+              present: { type: boolean }
+              reason: { type: string }
+              n_rows: { type: [integer, "null"] }
+
+    StageDetail:
+      allOf:
+        - $ref: "#/components/schemas/Stage"
+        - type: object
+          properties:
+            declared_header:
+              type: array
+              items: { type: string }
+            actual_header:
+              type: array
+              items: { type: string }
+              description: |
+                The header the FILE CARRIES. Cross-checked against the contract
+                as information, never as a filter: a file whose columns have
+                drifted is still the run's record, and hiding it would be worse
+                than flagging it. The committed stand-ins already disagree with
+                `STAGE_TABLES`, so a hard check would reject real files.
+            header_drift:
+              type: array
+              items:
+                type: object
+                properties:
+                  column: { type: string }
+                  kind: { type: string, enum: [missing_from_file, missing_from_contract] }
+            table: { $ref: "#/components/schemas/TableRead" }
+            events:
+              type: array
+              items: { $ref: "#/components/schemas/RawEvent" }
+
+    StageRows:
+      type: object
+      required: [stage, present, reason]
+      properties:
+        stage: { $ref: "#/components/schemas/StageName" }
+        present: { type: boolean }
+        reason: { type: string }
+        header:
+          type: array
+          items: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: { $ref: "#/components/schemas/VerdictValue" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    IsolatePage:
+      type: object
+      required: [items, meta, membership_source]
+      properties:
+        membership_source:
+          type: string
+          enum: [manifest, union_of_tables]
+          description: |
+            Which artefact defined the cohort. `union_of_tables` means no
+            manifest was readable and the cohort is the union of the per-sample
+            tables.
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Isolate" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    Isolate:
+      type: object
+      required: [sample_id]
+      properties:
+        sample_id: { type: string }
+        st:
+          $ref: "#/components/schemas/VerdictValue"
+          description: From `03_mlst.tsv`. `not assessed` when `MLST_status` is `no_call` or the row is missing.
+        amr_genes:
+          type: array
+          items: { type: string }
+          description: |
+            Many-valued on purpose. Choosing one determinant per sample would be
+            an interpretive act with no defensible basis. `[]` from a present
+            table is a measurement of zero; a missing table is `not assessed`.
+        amr_point_mutations:
+          type: array
+          items: { type: string }
+          description: |
+            Rows of `04_amr.tsv` whose `variant` column is non-empty. Non-empty
+            means the tool reported this element as mutated - it does NOT mean
+            disruptive. `determinant_type` is `AMR` for a point mutation and for
+            an intact gene alike, so it does not discriminate; `variant` does.
+            The column is labelled accordingly in the UI.
+        n_virulence:
+          $ref: "#/components/schemas/VerdictValue"
+          description: 0 when the table is present with no row for the sample; `not assessed` when the table is absent.
+        oprd_state:
+          type: string
+          description: A display state from `viz.OPRD_STATE_ORDER`. Never inferred; `not_assessed` unless a verdict source exists.
+          enum: [intact, disrupted, absent, not_assessed]
+        oprd_verdict:
+          type: [string, "null"]
+          description: A verdict from `adapters/oprd_locus.Verdict`, or null when no source exists.
+        oprd_evidence:
+          type: [object, "null"]
+          additionalProperties: true
+          description: The evidence behind the verdict. Present only when the verdict is.
+        phenotype_sir:
+          type: string
+          nullable: true
+          description: |
+            R, I, S, SDD or ND, for the run's antibiotic. `ND` is a recorded
+            value, distinct from an absent row. Never converted to an MIC or a
+            zone diameter.
+        lineage:
+          $ref: "#/components/schemas/VerdictValue"
+          description: |
+            From the master table, else `tree_metadata.tsv`. The master table
+            refuses a sentinel lineage, so a sentinel reaching here is surfaced
+            as a discrepancy rather than rendered.
+        n_snv:
+          $ref: "#/components/schemas/VerdictValue"
+          description: From `variants_provenance.json`, where every key is present at zero when the file exists.
+        n_indel:
+          $ref: "#/components/schemas/VerdictValue"
+          description: The non-SNV count. Same source and same rule as `n_snv`.
+        has_amr_gene:
+          type: boolean
+          description: |
+            Derived, server-side, from `amr_genes`. `filter.has_amr_gene=1`
+            selects the isolates that carry at least one AMR gene.
+        has_point_mutation:
+          type: boolean
+          description: |
+            Derived, server-side, from `amr_point_mutations`.
+            `filter.has_point_mutation=1` selects the isolates with a reported
+            point mutation.
+        virulence_min:
+          type: [integer, "null"]
+          description: |
+            The isolate's `n_virulence` when the table is present, else null.
+            `filter.virulence_min=N` means "at least N", applied as a `>=`.
+        basis: { $ref: "#/components/schemas/Basis" }
+
+    IsolateDetail:
+      type: object
+      required: [sample_id, tables]
+      properties:
+        sample_id: { type: string }
+        tables:
+          type: array
+          description: |
+            Every contributing table appears even when absent, so the page can
+            distinguish "this table had nothing for this isolate" from "this
+            table is not there".
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              present: { type: boolean }
+              reason: { type: string }
+              rows:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: { $ref: "#/components/schemas/VerdictValue" }
+        oprd: { $ref: "#/components/schemas/OprdResponse" }
+
+    OprdResponse:
+      type: object
+      required: [available, probes]
+      properties:
+        available: { type: boolean }
+        reason:
+          type: [string, "null"]
+          description: |
+            When unavailable, the quoted reason: no contracted path exists for
+            the oprD locus verdict, because `contracts.py` declares no oprD
+            table and `workflow/Snakefile` declares no oprD output, so the
+            run's in-memory resolutions are the only copy. This is a gap in the
+            run's durable record rather than a result, and it is stated as one.
+        probes:
+          type: array
+          description: EVERY path probed, in order, each with whether it held verdicts.
+          items:
+            type: object
+            properties:
+              n: { type: integer, minimum: 1 }
+              path: { type: string }
+              ok: { type: boolean }
+              reason: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              sample_id: { type: string }
+              verdict:
+                type: string
+                enum:
+                  - resolved
+                  - "refused:no_orthologous_hit"
+                  - "refused:insufficient_coverage"
+                  - "refused:ambiguous_locus"
+                  - "refused:ambiguous_second_locus"
+                description: |
+                  Only `resolved` asserts the locus is present. No refusal means
+                  the locus is absent - each means it was not assessed, and
+                  `absent` is reserved for a confirmed structural verdict.
+              lesion_type: { type: [string, "null"] }
+              position: { type: [integer, "null"] }
+              truncation_aa: { type: [integer, "null"] }
+              identity_pct: { type: [number, "null"] }
+              coverage_pct: { type: [number, "null"] }
+              display_state:
+                type: string
+                enum: [intact, disrupted, absent, not_assessed]
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    Pangenome:
+      type: object
+      required: [present, reason]
+      properties:
+        present: { type: boolean }
+        reason: { type: string }
+        summary:
+          type: object
+          description: '`pangenome_summary.tsv` is metric/value, so it is pairs.'
+          additionalProperties: { type: string }
+        gene_tables:
+          type: array
+          description: Counts for the three tables the Snakefile declares and contracts.py does not.
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              path: { type: string }
+              declared_by: { type: string }
+              present: { type: boolean }
+              reason: { type: string }
+              n_rows: { type: [integer, "null"] }
+        basis: { $ref: "#/components/schemas/Basis" }
+
+    Tree:
+      type: object
+      required: [present, reason]
+      properties:
+        present: { type: boolean }
+        reason: { type: string }
+        identity:
+          type: string
+          const: postorder index from the root, assigned server-side
+          description: |
+            A position in THIS file, not a biological identity. A client cannot
+            mistake "the node the server called 17" for "clade 17".
+        source:
+          type: string
+          enum: [stage9, gubbins]
+        n_tips: { type: integer, minimum: 0 }
+        n_internal: { type: integer, minimum: 0 }
+        has_branch_lengths: { type: boolean }
+        nodes:
+          type: array
+          items:
+            type: object
+            required: [node_id, is_tip]
+            properties:
+              node_id:
+                type: integer
+                minimum: 0
+                description: Postorder index. The ONLY identifier a client references.
+              parent_id: { type: [integer, "null"] }
+              children:
+                type: array
+                items: { type: integer }
+              length:
+                type: [number, "null"]
+                description: |
+                  IQ-TREE branch lengths are expected substitutions per site, not
+                  SNP counts. The two are not interchangeable.
+              is_tip: { type: boolean }
+              label:
+                type: [string, "null"]
+                description: |
+                  DISPLAY ONLY. Never an identity: the committed `real_tree.nwk`
+                  repeats `100/100` across three internal nodes and leaves one
+                  unlabelled.
+              support:
+                type: [number, "null"]
+                description: A support value, present only when the label parses as one.
+        tip_check:
+          type: object
+          description: |
+            The same set difference `phylogeny.validate_tree_samples` reports.
+            A tree whose tips cannot be joined is reported, not drawn silently.
+          properties:
+            matched: { type: boolean }
+            n_missing_in_tree: { type: integer, minimum: 0 }
+            n_extra_in_tree: { type: integer, minimum: 0 }
+            missing: { type: array, items: { type: string } }
+            extra: { type: array, items: { type: string } }
+            reason: { type: string }
+
+    TipPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              node_id: { type: integer, minimum: 0 }
+              sample_id: { type: string }
+              label: { type: string }
+              lineage_label: { $ref: "#/components/schemas/VerdictValue" }
+              st: { $ref: "#/components/schemas/VerdictValue" }
+              phenotype: { type: [string, "null"] }
+              source: { $ref: "#/components/schemas/VerdictValue" }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    Similarity:
+      type: object
+      required: [present, reason]
+      properties:
+        present: { type: boolean }
+        reason: { type: string }
+        n_total: { type: integer, minimum: 0 }
+        n_shown: { type: integer, minimum: 0 }
+        downsampled: { type: boolean }
+        method:
+          type: [string, "null"]
+          description: Present only when downsampled. A silent truncation is not offered.
+        order:
+          type: array
+          items: { type: string }
+        matrix:
+          type: array
+          description: n_shown rows of n_shown values. Square, `sample_id` aligned with `order`.
+          items:
+            type: array
+            items: { type: number }
+        units:
+          type: ["object", "null"]
+          additionalProperties: true
+          description: |
+            `similarity.units.json` passed through unmodified. Null when the
+            sidecar is absent, and the UI then says the units are not recorded -
+            it does not assume them. `is_a_snp_count` is false by construction.
+        basis: { $ref: "#/components/schemas/Basis" }
+
+    GwasPage:
+      type: object
+      required: [present, reason, n_tests]
+      properties:
+        present: { type: boolean }
+        reason: { type: string }
+        n_tests:
+          type: integer
+          minimum: 0
+          description: |
+            The row count. The QQ plot derives its expected quantiles from this
+            server-side rather than in the browser.
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              feature: { type: string }
+              feature_type: { type: string }
+              effect: { $ref: "#/components/schemas/VerdictValue" }
+              p_value: { type: [number, "null"] }
+              adjusted_p_value: { type: [number, "null"] }
+              effect_size: { type: [number, "null"] }
+              frequency: { type: [number, "null"] }
+              lineage_distribution: { $ref: "#/components/schemas/VerdictValue" }
+              model:
+                type: string
+                description: |
+                  Shown verbatim. Every reference-engine result is stamped
+                  `reference_fisher:NO_KINSHIP_CORRECTION`, and a p-value without
+                  that stamp is anti-conservative in a structured cohort. A row
+                  whose model does not name its correction is flagged.
+              model_states_kinship_correction: { type: boolean }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    GwasTop:
+      type: object
+      required: [present, reason, items]
+      properties:
+        present: { type: boolean }
+        reason: { type: string }
+        n_tests:
+          type: integer
+          minimum: 0
+          description: |
+            The number of GWAS tests in the run. `basis.n` is the cohort the
+            tests were computed on; `n_returned` is the size of this top list.
+            A 25-hit top list on a 900-isolate run must not read as n=25.
+        n_returned:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              feature: { type: string }
+              adjusted_p_value: { type: [number, "null"] }
+              p_value: { type: [number, "null"] }
+              dominant_lineage_share: { type: [number, "null"] }
+              lineage_linked:
+                type: boolean
+                description: |
+                  A feature carried only by samples of one lineage cannot be
+                  separated from that lineage by any association test. Such a
+                  feature is RELABELLED, never deleted, and never presented as a
+                  resistance determinant.
+        basis: { $ref: "#/components/schemas/Basis" }
+
+    ConvergencePage:
+      type: object
+      required: [present, reason, category_order, items]
+      properties:
+        present: { type: boolean }
+        reason: { type: string }
+        category_order:
+          type: array
+          description: |
+            The five categories, in the order they are evaluated, which is what
+            makes them mutually exclusive. The order is part of the science and
+            is not re-sorted for display.
+          items:
+            type: string
+            enum:
+              - widespread_background
+              - rare_isolated
+              - lineage_associated
+              - recurrent_convergent
+              - unknown
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              determinant: { type: string }
+              independent_lineages: { type: [integer, "null"] }
+              branch_count: { type: [integer, "null"] }
+              distribution: { $ref: "#/components/schemas/VerdictValue" }
+              convergence_category: { type: string }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    CooccurrencePage:
+      type: object
+      required: [present, reason, items]
+      properties:
+        present: { type: boolean }
+        reason: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              feature_a: { type: string }
+              feature_b: { type: string }
+              feature_type: { type: string }
+              n_a: { type: [integer, "null"] }
+              n_b: { type: [integer, "null"] }
+              n_both: { type: [integer, "null"] }
+              statistic: { $ref: "#/components/schemas/VerdictValue" }
+              statistic_value: { type: [number, "null"] }
+              adjusted_p_value: { type: [number, "null"] }
+              interpretation_limit:
+                type: string
+                description: |
+                  Rendered beside every pair. Co-occurrence is association only
+                  and is never presented as an interaction.
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    Provenance:
+      type: object
+      required: [manifest_writer]
+      properties:
+        manifest_writer: { type: string, enum: [run, provenance, none] }
+        tools:
+          type: object
+          description: |
+            From `tools_detected` (the run writer) or `stage_tool_requirements`
+            (the pre-run writer). Whichever is present; the field name says
+            which.
+          additionalProperties:
+            type: object
+            properties:
+              available: { type: boolean }
+              version: { type: [string, "null"] }
+              executable: { type: [string, "null"] }
+        tool_source:
+          type: string
+          enum: [tools_detected, stage_tool_requirements, none]
+        references:
+          type: array
+          description: |
+            One row shape from `build_provenance` under either writer.
+          items:
+            type: object
+            properties:
+              reference_id: { type: string }
+              tool: { type: [string, "null"] }
+              tool_version: { type: [string, "null"] }
+              database: { type: [string, "null"] }
+              database_version: { type: [string, "null"] }
+              version_status:
+                type: [string, "null"]
+                enum: [pinned, unpinned, na, null]
+        unpinned_references:
+          type: array
+          items: { type: string }
+          description: Reported as a failure, not a silent pass.
+        bakta_executions:
+          type: [integer, "null"]
+          description: |
+            How many times Bakta was invoked, which the annotation-reuse path
+            can make fewer than the cohort size. Null when neither the manifest
+            nor the reuse record carries it - and null renders as
+            "not reported", never as 0. See `/api/provenance/bakta`.
+        git:
+          type: object
+          properties:
+            head: { type: [string, "null"] }
+            branch: { type: [string, "null"] }
+            dirty: { type: [boolean, "null"] }
+            status_lines:
+              type: array
+              items: { type: string }
+        config_snapshot:
+          type: object
+          description: science.yaml plus the machine overlay actually loaded.
+          additionalProperties: { type: string }
+        host:
+          type: object
+          properties:
+            disk_free_bytes: { type: [integer, "null"] }
+            disk_total_bytes: { type: [integer, "null"] }
+            load_average: { type: array, items: { type: number }, nullable: true }
+
+    BaktaProvenance:
+      type: object
+      required: [available]
+      properties:
+        available: { type: boolean }
+        reason: { type: string }
+        bakta_executions:
+          type: [integer, "null"]
+          description: Null, not 0, when the count is not recorded.
+        n_samples: { type: [integer, "null"] }
+        reused_from_run:
+          type: [string, "null"]
+          description: The run whose Bakta output was reused, when it was.
+        verified:
+          type: [boolean, "null"]
+          description: Whether the reused output was verified rather than trusted.
+
+    LogPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string, enum: [tripwire, watcher] }
+              present: { type: boolean }
+              reason: { type: string }
+              path: { type: [string, "null"] }
+              n_lines: { type: [integer, "null"] }
+              lines:
+                type: array
+                items: { type: string }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+
+    DigestList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              path: { type: string }
+              sha256: { type: string }
+              size: { type: integer, minimum: 0 }
+              mtime_ns: { type: integer }
+
+    ReportList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+                description: Relative to the opened results root. Never absolute.
+              name: { type: string }
+              kind: { type: string, enum: [markdown, html, figure, other] }
+              size: { type: integer, minimum: 0 }
+              mtime_ns: { type: integer }
+
+    RawEvent:
+      type: object
+      description: |
+        One line of `status/events.jsonl`, verbatim. Four fields, three values
+        for `event`. A line with a fifth field or a fourth value is skipped with
+        a warning naming its line number, and is never coerced into this shape.
+      required: [t, event, stage, sample]
+      properties:
+        t:
+          type: string
+          description: ISO-8601 UTC, second resolution, `Z` suffix.
+        event: { type: string, enum: [start, done, fail] }
+        stage: { type: string }
+        sample:
+          type: string
+          description: A sample id, or the literal `all` for an aggregate rule.
+        line:
+          type: integer
+          description: 1-based line number in the log, for diagnostics.
+        mapped_stage:
+          type: [string, "null"]
+          description: |
+            The log carries Snakemake RULE names, which are not always the code
+            stage names (`rule validate` vs `validation`). Unmapped names are
+            reported in the stream's diagnostics rather than dropped.
+
+    EventState:
+      type: object
+      description: The polling fallback. Carries what the SSE `snapshot` frame carries.
+      required: [transport, cursor, stages]
+      properties:
+        transport:
+          type: string
+          enum: [poll, none]
+          description: |
+            `poll` when the stream could not be opened and this endpoint works.
+            `none` when it does not - and the UI then shows
+            "event stream unavailable: <reason>" rather than an empty log.
+        cursor:
+          type: integer
+          minimum: 0
+          description: Byte offset. Sent back on the next poll to resume.
+        n_events: { type: integer, minimum: 0 }
+        n_lines_skipped:
+          type: integer
+          minimum: 0
+          description: Malformed lines skipped, with a warning naming each.
+        stages:
+          type: array
+          items: { $ref: "#/components/schemas/Stage" }
+        totals:
+          type: object
+          additionalProperties: { type: integer }
+        skipped_warnings:
+          type: array
+          items: { type: string }
+
+    LauncherCapabilities:
+      type: object
+      required: [can_launch, reason]
+      properties:
+        can_launch: { type: boolean, const: false }
+        reason:
+          type: string
+          description: |
+            Phase 0 starts nothing. Which command a launch would run is Phase
+            1's decision and is not inferred here from the pipeline's CLI.
+        allowed_actions:
+          type: array
+          items: { type: string }
+        forbidden_actions:
+          type: array
+          items: { type: string }
+
+    LauncherStatus:
+      type: object
+      required: [running, per_isolate_timings]
+      properties:
+        running: { type: boolean }
+        last_event:
+          oneOf:
+            - $ref: "#/components/schemas/RawEvent"
+            - type: "null"
+        per_isolate_timings:
+          type: ["object", "null"]
+          description: |
+            Per-isolate timings from a runbook, keyed on sample_id, when one
+            supplied them. NULL otherwise, and the UI reads "timings not
+            recorded" - it never derives a per-isolate estimate from the cohort
+            size.
+          additionalProperties: { type: number }
+        timings_source:
+          type: [string, "null"]
+          enum: [runbook, none, null]
+
+    Preflight:
+      type: object
+      required: [checks, would_start]
+      properties:
+        would_start:
+          type: boolean
+          const: false
+          description: Always false in Phase 0.
+        checks:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              passed: { type: boolean }
+              detail: { type: string }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: |
+            A sentence naming what was wanted and why it is not there. A blank
+            section and a zero-row table are both refusals here, and so is a
+            plausible-looking zero.
+        detail: { type: [string, "null"] }
+        probes:
+          type: array
+          items: { type: object, additionalProperties: true }

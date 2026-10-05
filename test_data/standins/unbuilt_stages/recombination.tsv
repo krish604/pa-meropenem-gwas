@@ -1,0 +1,8 @@
+# STAND-IN FIXTURE - NOT STAGE OUTPUT, NOT BIOLOGICAL RESULTS
+# Stands in for spec.md D1 stage 8 (`recombination`), which has no
+# implementation. Satisfies the declared edge from stage 9 (phylogeny) to
+# stage 8 so the DAG builds in TEST.
+# One row: stage_spec() requires non_empty and min_rows(1).
+# ticket 14 builds the stage; this file is deleted then. See TASKS.md.
+STANDIN	standin_not_computed	standin_not_computed	standin_not_computed
+STANDIN	standin_not_computed	standin_not_computed	standin_not_computed

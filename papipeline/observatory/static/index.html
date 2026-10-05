@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PAPipeline — Computational Observatory</title>
+<link rel="stylesheet" href="/static/css/observatory.css">
+</head>
+<body>
+
+<!-- ── top bar ─────────────────────────────────────────────────────── -->
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="1.4">
+        <path d="M6 25 L16 6 L26 25 M6 25 L26 25 M11 17 L21 17 M16 6 L16 25"/>
+        <circle cx="6" cy="25" r="2.4" fill="currentColor"/>
+        <circle cx="16" cy="6" r="2.4" fill="currentColor"/>
+        <circle cx="26" cy="25" r="2.4" fill="currentColor"/>
+      </g>
+    </svg>
+    <div class="brand-text">
+      <span class="brand-name">PAPipeline</span>
+      <span class="brand-sub">Computational Observatory</span>
+    </div>
+  </div>
+
+  <div class="brand-context">
+    <span class="ctx-line" id="ctx-organism">Pseudomonas aeruginosa</span>
+    <span class="ctx-line dim" id="ctx-kind">Genomic Analysis Pipeline</span>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab is-active" data-view="overview" role="tab">Overview</button>
+    <button class="tab" data-view="pipeline" role="tab">Pipeline</button>
+    <button class="tab" data-view="validation" role="tab">Validation</button>
+    <button class="tab" data-view="logs" role="tab">Logs</button>
+    <button class="tab" data-view="provenance" role="tab">Provenance</button>
+  </nav>
+
+  <div class="topbar-right">
+    <span class="live" id="live-badge"><i class="dot"></i><span id="live-text">LIVE</span></span>
+    <time class="clock" id="clock">—</time>
+    <button class="icon-btn" id="btn-freeze" title="Freeze the display (events still arrive)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3v10M11 3v10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    </button>
+    <button class="icon-btn" id="btn-reconnect" title="Force a reconnect">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2v3h-3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- ── left: task detail ──────────────────────────────────────────── -->
+  <aside class="panel detail" id="detail-panel">
+    <div class="detail-scroll">
+
+      <section class="task-head">
+        <div class="task-head-top">
+          <span class="eyebrow">CURRENT TASK</span>
+          <span class="state-pill" id="task-state" data-state="PENDING">PENDING</span>
+          <span class="task-clock" id="task-elapsed">—</span>
+        </div>
+        <h1 class="task-title" id="task-subject">No task selected</h1>
+        <p class="task-stage"><span class="dim">Stage:</span> <span id="task-stage">—</span></p>
+        <div class="progress" id="task-progress-wrap" hidden>
+          <div class="progress-bar"><i id="task-progress-fill"></i></div>
+          <span class="progress-pct" id="task-progress-pct">—</span>
+        </div>
+        <p class="unavailable-note" id="task-progress-note" hidden>
+          The execution engine reports no per-task progress. Cohort completion below is real.
+        </p>
+      </section>
+
+      <section class="tiles" id="task-tiles">
+        <div class="tile"><span class="tile-key">Status</span><span class="tile-val" id="t-state">—</span></div>
+        <div class="tile"><span class="tile-key">Attempt</span><span class="tile-val" id="t-attempt">—</span></div>
+        <div class="tile"><span class="tile-key">Elapsed</span><span class="tile-val" id="t-elapsed">—</span></div>
+        <div class="tile"><span class="tile-key">Started</span><span class="tile-val" id="t-started">—</span></div>
+        <div class="tile"><span class="tile-key">Ended</span><span class="tile-val" id="t-ended">—</span></div>
+        <div class="tile"><span class="tile-key">Worker</span><span class="tile-val" id="t-worker">—</span></div>
+        <div class="tile"><span class="tile-key">CPU (process)</span><span class="tile-val na" id="t-cpu">not reported</span></div>
+        <div class="tile"><span class="tile-key">RAM (process)</span><span class="tile-val na" id="t-ram">not reported</span></div>
+        <div class="tile"><span class="tile-key">Disk I/O</span><span class="tile-val na" id="t-diskio">not reported</span></div>
+      </section>
+
+      <div class="two-col">
+        <section class="card">
+          <h2 class="card-head">INPUT</h2>
+          <ul class="kv" id="task-input"><li class="na">—</li></ul>
+        </section>
+
+        <section class="card">
+          <h2 class="card-head">OUTPUT <span class="card-sub" id="output-sub"></span></h2>
+          <ul class="files" id="task-output"><li class="na">—</li></ul>
+        </section>
+      </div>
+
+      <section class="card">
+        <h2 class="card-head">VALIDATION <span class="card-sub" id="validation-sub"></span></h2>
+        <ul class="checks" id="task-validation"><li class="na">—</li></ul>
+      </section>
+
+      <section class="card">
+        <h2 class="card-head">COMMAND
+          <button class="copy-btn" id="btn-copy-cmd" title="Copy command">copy</button>
+        </h2>
+        <pre class="command" id="task-command"><span class="na">—</span></pre>
+        <dl class="kv tight" id="task-provenance"></dl>
+      </section>
+
+      <section class="card error-card" id="task-error-card" hidden>
+        <h2 class="card-head">ERROR</h2>
+        <pre class="error" id="task-error"></pre>
+      </section>
+
+      <section class="history">
+        <div class="tabs sub" role="tablist">
+          <button class="tab is-active" data-pane="events" role="tab">Event History</button>
+          <button class="tab" data-pane="log" role="tab">Log (live)</button>
+          <button class="tab" data-pane="retries" role="tab">Retry History</button>
+        </div>
+        <div class="pane" id="pane-events">
+          <ul class="events" id="event-list"><li class="na">No events received yet.</li></ul>
+        </div>
+        <div class="pane" id="pane-log" hidden>
+          <div class="log-toolbar">
+            <input type="search" id="log-search" placeholder="filter log" aria-label="Filter log">
+            <label class="checkline"><input type="checkbox" id="log-errors"> errors only</label>
+            <button class="mini-btn" id="log-pause">pause</button>
+          </div>
+          <pre class="log" id="log-body">No log for this task.</pre>
+        </div>
+        <div class="pane" id="pane-retries" hidden>
+          <ul class="attempts" id="attempt-list"><li class="na">No attempts recorded.</li></ul>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+
+  <!-- ── right: network + metrics ───────────────────────────────────── -->
+  <section class="right">
+
+    <div class="panel network" id="network-panel">
+      <div class="network-head">
+        <div>
+          <h1 class="network-title">Computational Task Network</h1>
+          <p class="network-sub" id="network-sub">Awaiting execution state</p>
+        </div>
+        <div class="view-tools">
+          <div class="seg" role="group" aria-label="Edge visibility">
+            <button class="seg-btn is-active" data-edges="both">All edges</button>
+            <button class="seg-btn" data-edges="dependency">Dependencies</button>
+            <button class="seg-btn" data-edges="sequence">Order only</button>
+          </div>
+          <div class="seg" role="group" aria-label="View">
+            <button class="seg-btn" data-view2="cohort">Cohort</button>
+            <button class="seg-btn is-active" data-view2="stage">Stages</button>
+            <button class="seg-btn" data-view2="genome">Genomes</button>
+          </div>
+          <button class="icon-btn" id="btn-fit" title="Fit the whole pipeline">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="canvas-host" id="canvas-host">
+        <canvas id="network-canvas"></canvas>
+        <div class="node-tip" id="node-tip" hidden></div>
+        <div class="idle-overlay" id="idle-overlay">
+          <div class="idle-badge">PIPELINE IDLE</div>
+          <p class="idle-msg" id="idle-msg">No execution state recorded. Host metrics below are live.</p>
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="zoom-controls">
+          <button class="icon-btn" id="btn-zoom-in" title="Zoom in">+</button>
+          <button class="icon-btn" id="btn-zoom-out" title="Zoom out">−</button>
+          <span class="zoom-level" id="zoom-level">100%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel metrics" id="metrics-panel">
+      <div class="progress-block">
+        <div class="progress-head">
+          <span class="eyebrow">COHORT PROGRESS</span>
+          <span class="progress-fraction" id="cohort-fraction">—</span>
+        </div>
+        <div class="progress-bar tall"><i id="cohort-fill"></i></div>
+        <span class="progress-note" id="cohort-note">no tasks recorded</span>
+      </div>
+
+      <div class="counters" id="counters">
+        <div class="counter" data-state="SUCCEEDED"><b id="c-completed">0</b><span>Completed</span></div>
+        <div class="counter" data-state="RUNNING"><b id="c-running">0</b><span>Running</span></div>
+        <div class="counter" data-state="PENDING"><b id="c-queued">0</b><span>Queued</span></div>
+        <div class="counter" data-state="FAILED"><b id="c-failed">0</b><span>Failed</span></div>
+        <div class="counter" data-state="INVALID"><b id="c-invalid">0</b><span>Invalid</span></div>
+        <div class="counter" data-state="INCOMPLETE"><b id="c-incomplete">0</b><span>Incomplete</span></div>
+        <div class="counter"><b id="c-eta">—</b><span>ETA</span></div>
+        <div class="counter"><b id="c-throughput">—</b><span>Throughput</span></div>
+      </div>
+
+      <div class="sparks" id="sparks">
+        <div class="spark" data-metric="cpu">
+          <span class="spark-key">CPU Usage</span>
+          <b class="spark-val" id="s-cpu">—</b>
+          <canvas class="spark-canvas" data-series="cpu"></canvas>
+        </div>
+        <div class="spark" data-metric="ram">
+          <span class="spark-key">RAM Usage</span>
+          <b class="spark-val" id="s-ram">—</b>
+          <canvas class="spark-canvas" data-series="ram"></canvas>
+        </div>
+        <div class="spark" data-metric="disk">
+          <span class="spark-key">Disk I/O</span>
+          <b class="spark-val" id="s-disk">—</b>
+          <canvas class="spark-canvas" data-series="disk"></canvas>
+        </div>
+        <div class="spark" data-metric="uptime">
+          <span class="spark-key">Host Uptime</span>
+          <b class="spark-val" id="s-uptime">—</b>
+          <canvas class="spark-canvas" data-series="uptime"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

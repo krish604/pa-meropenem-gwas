@@ -1,0 +1,3 @@
+antibiotic	antibiotic_class	mechanism_scope	phenotype_source_standard	notes
+imipenem	carbapenem	permeability_efflux_ampc_acquired_beta_lactamase	CLSI_M100_table_2B	Stage 11 accepts R/I/S/SDD/ND only. R/I/S are never converted to MIC. Detecting a determinant does not establish phenotypic resistance.
+meropenem	carbapenem	permeability_efflux_ampc_acquired_beta_lactamase	CLSI_M100_table_2B	Configured example only. Enabling requires adding the antibiotic here and to config.yaml; no analysis code changes.

@@ -1,0 +1,26 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+# phenotype values are randomly assigned by the generator
+# MIC is only populated where the generator drew one independently
+# R/I/S are never converted into MIC
+sample_id	antibiotic	phenotype	MIC	MIC_unit	source
+TEST_PA_001	imipenem	R	.	.	synthetic_generator
+TEST_PA_002	imipenem	S	.	.	synthetic_generator
+TEST_PA_003	imipenem	S	.	.	synthetic_generator
+TEST_PA_004	imipenem	S	.	.	synthetic_generator
+TEST_PA_005	imipenem	R	4.6	mg/L	synthetic_generator
+TEST_PA_006	imipenem	S	.	.	synthetic_generator
+TEST_PA_007	imipenem	S	.	.	synthetic_generator
+TEST_PA_008	imipenem	S	.	.	synthetic_generator
+TEST_PA_009	imipenem	I	2.4	mg/L	synthetic_generator
+TEST_PA_010	imipenem	S	.	.	synthetic_generator
+TEST_PA_011	imipenem	S	.	.	synthetic_generator
+TEST_PA_012	imipenem	R	9.7	mg/L	synthetic_generator
+TEST_PA_013	imipenem	SDD	.	.	synthetic_generator
+TEST_PA_014	imipenem	R	.	.	synthetic_generator
+TEST_PA_015	imipenem	R	.	.	synthetic_generator
+TEST_PA_016	imipenem	R	.	.	synthetic_generator
+TEST_PA_017	imipenem	ND	.	.	synthetic_generator
+TEST_PA_018	imipenem	S	.	.	synthetic_generator
+TEST_PA_019	imipenem	R	11.1	mg/L	synthetic_generator
+TEST_PA_020	imipenem	S	.	.	synthetic_generator

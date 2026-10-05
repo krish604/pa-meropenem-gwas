@@ -1,0 +1,17 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+# call_status distinguishes confirmed, candidate and not_assessable
+sample_id	variant_id	variant_type	position	affected_gene	size	evidence	confidence	call_status	mge
+TEST_PA_001	TEST_PA_001_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS
+TEST_PA_004	TEST_PA_004_SV_CAND_001	deletion	5000	mexXY	900	synthetic_low_support	low	candidate	.
+TEST_PA_005	TEST_PA_005_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS
+TEST_PA_006	TEST_PA_006_SV_NA_001	deletion	.	mexAB	.	synthetic_contig_gap	.	not_assessable	.
+TEST_PA_007	TEST_PA_007_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS
+TEST_PA_008	TEST_PA_008_SV_CAND_001	deletion	5000	mexXY	900	synthetic_low_support	low	candidate	.
+TEST_PA_009	TEST_PA_009_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS
+TEST_PA_012	TEST_PA_012_SV_CAND_001	deletion	5000	mexXY	900	synthetic_low_support	low	candidate	.
+TEST_PA_015	TEST_PA_015_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS
+TEST_PA_016	TEST_PA_016_SV_CAND_001	deletion	5000	mexXY	900	synthetic_low_support	low	candidate	.
+TEST_PA_017	TEST_PA_017_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS
+TEST_PA_018	TEST_PA_018_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS
+TEST_PA_020	TEST_PA_020_SV_OPRD_INS	insertion_sequence	415	oprD	1200	synthetic_contig_breakpoint	high	confirmed	SYN_IS

@@ -1,0 +1,214 @@
+# =============================================================================
+# Pinned environment - DEVELOPMENT MACHINE (macOS arm64 / Apple Silicon)
+#
+# This file is resolved and verified on osx-arm64. Every version below was
+# confirmed by a real `micromamba create --dry-run --platform osx-arm64`
+# solve, and the bioinformatics tool versions match the ones in the
+# `pilot100` environment that has actually run this pipeline on this machine.
+# Nothing here is from memory or from a tutorial.
+#
+# Create:
+#   micromamba env create -f environment/environment.yml
+#   micromamba run -n pa-amr pytest -q
+#
+# Activate:
+#   micromamba activate pa-amr
+#
+# ------------------------------------------------------------------
+# THIS FILE IS THE LAPTOP ENVIRONMENT, NOT THE ANALYSIS ENVIRONMENT.
+# ------------------------------------------------------------------
+# One tool the full 15-stage pipeline needs cannot run in THIS environment:
+# gubbins. See environment/environment-linux.yml.
+#
+#   gubbins  - installs in a separate osx-arm64 env, then crashes immediately:
+#              exit 139, and under lldb "EXC_BAD_ACCESS (code=1, address=0x0)"
+#              with frame #0 at 0x0. A null-pointer dereference in gubbins' own
+#              compiled code, on the newest build
+#              (gubbins-3.4.3-py310hdfa5cb7_1). Ruled out with evidence: not
+#              Rosetta (all binaries native arm64), not numba/llvmlite
+#              (NUMBA_DISABLE_JIT=1 reproduces the same 139), not a missing
+#              LC_LOAD_DYLIB (otool -L shows no libz; libz references are 0).
+#              Input-independent and reproducible in a pristine env.
+#
+#   panaroo  - NOT a blocker any more. Installed from source via pip below,
+#              because the conda recipe's hard prokka dependency is unsolvable
+#              on arm64 and prokka is never actually invoked (prokka.py is a
+#              GFF3 reader). Verified end-to-end against real Bakta GFF3.
+#
+# Consequence: stage 8 (recombination) cannot run on this machine. Stages 9-15
+# depend on it, so the laptop still cannot perform a full REAL run. That is a
+# property of this environment, not a misconfiguration.
+#
+# Tool availability is intended to be declared in a machine overlay config
+# (delivered by a later phase, not yet present in this repository) and a rule
+# needing an unavailable tool should fail at DAG-build time naming the tool.
+# STUB and TEST modes are unaffected - they invoke no tools.
+#
+# VERSION DISCIPLINE
+# ------------------
+# Versions are pinned with `=<version>`. `config/references.tsv` is the
+# authoritative record of DATABASE versions; `environment/versions.sh` prints
+# what is actually installed so the two can be compared.
+#
+# NOTHING is downloaded automatically at analysis time. Database and reference
+# provisioning is a deliberate, out-of-band step.
+# =============================================================================
+
+name: pa-amr
+
+channels:
+  - conda-forge
+  - bioconda
+
+# `defaults` is deliberately NOT a channel here. It resolves to
+# repo.anaconda.com, which repeatedly failed DNS during the osx-arm64
+# build of this environment, and every package below resolves from
+# conda-forge or bioconda without it.
+
+dependencies:
+  # --- core pipeline --------------------------------------------------------
+  # These versions are the ones the `pilot100` environment runs under, which
+  # is the baseline this codebase is known to work with. Note numpy 2.x and
+  # pandas 3.x: an earlier revision of this file pinned 1.26.4 / 2.2.2, which
+  # was stale and did not describe any environment that had actually run.
+  - python=3.11.16
+  - pyyaml=6.0.3
+  - numpy=2.4.6
+  - pandas=3.0.6
+  - scipy=1.17.1
+  - matplotlib-base=3.11.2
+  - networkx=3.6.1
+  - jinja2=3.1.6
+  - pytest=9.1.1
+  - pytest-cov=7.1.0
+
+  # --- dashboard (the observatory is optional; these serve the new one) -----
+  - fastapi=0.141.1
+  - uvicorn=0.54.0
+  - psutil=7.2.2
+  - httpx=0.28.1        # test client for the dashboard API
+
+  # --- workflow engine ------------------------------------------------------
+  - snakemake-minimal=9.27.0
+
+  # --- stage 1: validation --------------------------------------------------
+  - seqkit=2.14.0
+
+  # --- stage 2: annotation --------------------------------------------------
+  - bakta=1.12.1
+
+  # --- stage 3: MLST --------------------------------------------------------
+  - mlst=2.33.1
+
+  # --- stage 4: AMR detection ----------------------------------------------
+  # The package is `ncbi-amrfinderplus`. `amrfinder` does not exist in any
+  # channel - an earlier revision of this file pinned it and could not solve.
+  - ncbi-amrfinderplus=4.2.7
+
+  # --- stage 5: virulence ---------------------------------------------------
+  # BLAST+ is versioned 2.x. An earlier revision pinned 4.14.1, which does not
+  # exist; 2.17.0 is current and is what pilot100 runs.
+  - blast=2.17.0
+
+  # --- stage 6: variant calling --------------------------------------------
+  - minimap2=2.31
+  # samtools 0.1.19 looks wrong and is not. bioconda's newest osx-arm64 samtools
+  # is 1.8, but `samtools 1.8` is unsolvable here because mlst's Perl stack
+  # pins it: mlst -> perl-bioperl -> perl-bio-samtools -> samtools >=0.1.19,<0.2.
+  # This build's samtools has NO `consensus` subcommand.
+  #
+  # CONSEQUENCE FOR STAGE 6: variant calling must go through bcftools
+  # (mpileup + call). Never call `samtools consensus`; it does not exist here.
+  # bcftools and htslib are SEPARATE packages that report their own versions
+  # (bcftools 1.23.1, htslib 1.23.1), not samtools 0.1.19.
+  - samtools=0.1.19
+  - bcftools=1.23.1
+  - htslib=1.23.1
+
+  # --- stage 9: phylogeny ---------------------------------------------------
+  # The package is `iqtree`. `iqtree2` does not exist in any channel. 3.1.3 is
+  # the IQ-TREE 3 codebase; confirm the binary name and its flags with
+  # `iqtree --help` before relying on them.
+  - iqtree=3.1.3
+
+  # --- stage 12: GWAS -------------------------------------------------------
+  - pyseer=1.1.2
+
+  # --- stage 7: pangenome (panaroo) -----------------------------------------
+  # DO NOT "SIMPLIFY" THIS BACK TO `- panaroo=<version>`. The bioconda recipe is
+  # unsolvable on osx-arm64 at EVERY version, and the reason is not the
+  # architecture:
+  #
+  #   panaroo [1.6.0|1.7.0|1.8.0] -> prokka -> ( tbl2asn-forever >=25.7  (no channel)
+  #                                         | perl >=5.26.2,<5.26.3.0a0 (dead pin) )
+  #   panaroo [<=1.5.2]             -> mkl   (no osx-arm64 build)
+  #
+  # A `--platform osx-arm64` solve pulls ZERO osx-64 packages, so this is a
+  # dependency-metadata problem. intbitset is NOT the blocker: it has a working
+  # arm64 build, and the 2026-09-25 conda-forge fix has landed.
+  #
+  # THE PROKKA DEPENDENCY IS SPURIOUS. `panaroo/prokka.py` is a GFF3 *reader* -
+  # it parses GFF3 text and contains no subprocess call to prokka. panaroo shells
+  # out to cd-hit (below), which installs cleanly on arm64 (4.8.1, verified).
+  # The conda recipe hard-requires a tool panaroo never invokes at runtime, and
+  # that is the entire reason the solve fails.
+  #
+  # Evidence this works, not just that it installs: run against unmodified real
+  # Bakta GFF3 for the 10-isolate smoke cohort (Bakta v1.12.1, DB v6.0 light) it
+  # exits 0 and produces 10,019 gene families - 4,828 core (in all 10 genomes),
+  # 5,191 accessory, 0 genome-specific. 4,828 core is the expected figure for
+  # P. aeruginosa. See docs/environment-arm64.md section 3.
+  #
+  # cd-hit is an external binary, not a Python dependency, so it is a conda
+  # dependency while panaroo itself is pip.
+  - cd-hit=4.8.1
+  - pip
+
+  # --- stage 8 dependency (see header: gubbins itself is unavailable) -------
+  # mafft is present so that the alignment step is available, but with gubbins
+  # absent the recombination stage cannot run on this machine regardless.
+  - mafft=7.526
+
+  # --- stage 10: core SNP calling ------------------------------------------
+  - snp-sites=2.5.1
+
+  # --- general --------------------------------------------------------------
+  - git=2.55.0
+  - jq=1.8.2
+
+  # =============================================================================
+  # pip-installed, because the conda package cannot solve on this platform.
+  # =============================================================================
+  # Pinned to an exact commit, not a branch: `git+...@master` would silently
+  # change what runs the science when upstream moves. e96b497 is the commit
+  # verified above. Bump deliberately, and re-verify the core-gene count.
+  #
+  # CAVEAT - read before changing anything here. panaroo's install_requires
+  # includes numpy, scipy, matplotlib, networkx and scikit-learn, all of which
+  # this file already pins as conda packages above. pip resolves independently
+  # of conda and may install its own copies or upgrade the pinned ones in this
+  # environment. The pinned scientific stack is the thing that keeps
+  # laptop and big-machine results comparable, so after any change to this
+  # section, run `environment/versions.sh` and confirm the conda pins above are
+  # still what is actually installed.
+  - pip:
+      # panaroo 1.8.0; prokka bypass rationale above and in docs/environment-arm64.md
+      - panaroo @ git+https://github.com/gtonkinhill/panaroo.git@e96b4978327536256b5c663f741138fc7aabed64
+
+# =============================================================================
+# NOT INSTALLED HERE. Required by the full pipeline; installed from
+# environment/environment-linux.yml. The versions there are the linux-64
+# maxima, which differ from the osx-arm64 maxima:
+#
+#   - gubbins=3.4.1   stage 8  (recombination filter)  arm64 builds exist but
+#                                               are py310-only, incompatible
+#                                               with this env's Python 3.11.16,
+#                                               AND segfault when run natively
+#                                               (see header)
+#
+#   panaroo is NOT in this list. It is installed here, from source, via the
+#   pip: section above.
+#
+# Also commented out, as before:
+#   - rgi            optional CARD/RGI adapter, not wired in
+# =============================================================================

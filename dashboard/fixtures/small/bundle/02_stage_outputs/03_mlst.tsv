@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	ST	alleles	MLST_status	mlst_scheme	allele_database
+TEST_PA_001	2	abcZ:7;adk:9;aroE:11;guaA:13;gyrB:15;ircD:17;toxA:19	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_002	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_003	7	abcZ:22;adk:29;aroE:36;guaA:3;gyrB:10;ircD:17;toxA:24	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_004	2	abcZ:7;adk:9;aroE:11;guaA:13;gyrB:15;ircD:17;toxA:19	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_005	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_006	2	abcZ:7;adk:9;aroE:11;guaA:13;gyrB:15;ircD:17;toxA:19	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_007	ST_06	abcZ:34;adk:5;aroE:16;guaA:27	partial	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_008	5	abcZ:16;adk:21;aroE:26;guaA:31;gyrB:36;ircD:1;toxA:6	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_009	3	abcZ:10;adk:13;aroE:16;guaA:19;gyrB:22;ircD:25;toxA:28	typed	pseudomonas_aeruginosa	synthetic_scheme_v0
+TEST_PA_010	7	abcZ:22;adk:29;aroE:36;guaA:3;gyrB:10;ircD:17;toxA:24	typed	pseudomonas_aeruginosa	synthetic_scheme_v0

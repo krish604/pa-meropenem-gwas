@@ -1,0 +1,8 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+metric	value
+n_samples	20
+n_genes_total	10
+n_core_genes	5
+n_accessory_genes	5
+core_fraction	0.5000

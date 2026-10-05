@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	antibiotic	phenotype	amr_gene	amr_variant	chromosomal_mutation	regulator	mechanism	structural_variant	mlst	lineage	virulence_profile	gwas_feature	gwas_status	convergence_status	confidence	evidence_notes
+TEST_PA_001	imipenem	R	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_00	LINEAGE_A	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_002	imipenem	I	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_01	LINEAGE_B	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_003	imipenem	S	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_02	LINEAGE_C	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_004	imipenem	ND	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_03	LINEAGE_A	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_005	imipenem	R	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_04	LINEAGE_B	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_006	imipenem	I	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_05	LINEAGE_C	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_007	imipenem	S	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_06	LINEAGE_A	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_008	imipenem	ND	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_07	LINEAGE_B	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_009	imipenem	R	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_08	LINEAGE_C	synthetic	none	not_tested	unknown	high	synthetic
+TEST_PA_010	imipenem	I	synthetic_gene	none	none	none	antibiotic inactivation	none	mlst_09	LINEAGE_A	synthetic	none	not_tested	unknown	high	synthetic

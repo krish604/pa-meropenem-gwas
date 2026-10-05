@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	antibiotic	determinant	mechanism	evidence_level	gene	gene_type	notes
+TEST_PA_001	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_002	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_003	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_004	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_005	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_006	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_007	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_008	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_009	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic
+TEST_PA_010	imipenem	synthetic_determinant	antibiotic inactivation	synthetic	synthetic_gene	amr	synthetic

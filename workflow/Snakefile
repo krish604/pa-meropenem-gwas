@@ -1,0 +1,882 @@
+# =============================================================================
+# Pseudomonas aeruginosa imipenem AMR pipeline - Snakemake workflow
+#
+# This Snakefile is a thin orchestration layer. All scientific logic lives in
+# the importable `papipeline` package and each rule is a single call into it.
+# The native orchestrator (`papipeline.run`) calls the same functions in the
+# same order, so the two entry points cannot disagree about the science.
+#
+# Why thin: a Snakemake rule that re-implemented a parser would be a second
+# implementation of that parser, and the two would drift. Snakemake owns
+# dependency tracking, checkpointing, cluster submission and rerun-on-failure;
+# the package owns the science.
+#
+# WHICH PATH TO USE
+# -----------------
+# **`snakemake full_run` is the production path.** It runs `run_pipeline` once,
+# in one process, so every stage executes exactly once. Ask for
+# `results/<mode>/run_manifest.json` (or `rule full_run`) for a full run.
+#
+# The per-stage rules below exist for running ONE stage against a results tree a
+# previous full run produced. They are not on the path a full run takes, and they
+# are not free: the stage functions exchange in-memory structures, not files, so a
+# process that runs only one stage cannot reconstruct the state of the stages
+# before it. Each per-stage rule therefore calls `run_pipeline --only <stage>`,
+# and the orchestrator expands that to the stage plus its prerequisites,
+# recomputing the prerequisites in-process.
+#
+# **The cost, measured.** E2E-DISCOVER D15: invoking `rule variants`, whose only
+# new work is nucmer, opened `06_variants.log` with `--- stage amr ---`, because
+# Snakemake found `rule amr` satisfied and ran only `rule variants` - whose
+# `run_stage.py` then re-executed stage 4 from scratch. Stage 6 would have cost
+# 38 min of AMRFinderPlus and 68 min of Bakta before reaching nucmer. Nine
+# remaining stages at that rate is ~16 h of wall clock for ~30 min of actual
+# computation. `rule full_run` no longer takes that edge.
+#
+# Per-stage state caching is the remaining fix for the per-stage rules, and is
+# the first item of future work for them.
+#
+# Usage
+# -----
+#   # dry run, TEST mode
+#   snakemake --snakefile workflow/Snakefile --config mode=TEST \
+#       --cores 4 --dry-run
+#
+#   # full run, TEST mode
+#   snakemake --snakefile workflow/Snakefile --config mode=TEST --cores 4
+#
+#   # one stage
+#   snakemake --snakefile workflow/Snakefile --config mode=TEST --cores 4 \
+#       results/test/intermediate/stages/04_amr.tsv
+#
+# REAL mode is refused by the pipeline itself (runtime.allow_real_mode=false),
+# and `resolve_mode` below calls that check while this file is being evaluated,
+# so `--dry-run` refuses too - unless the session sets
+# PIPELINE_ALLOW_REAL_MODE=1, which is the documented override.
+#
+# It used to say "this Snakefile re-checks at DAG-build time", implying a second,
+# independent guard. There was never a second one: `resolve_mode` honours the
+# override, so `snakemake -n --config mode=REAL` with PIPELINE_ALLOW_REAL_MODE=1
+# builds happily. E2E-DISCOVER D13. The sentence now says what the code does,
+# which is one check with an override rather than a check and a comment.
+# =============================================================================
+
+import sys
+from pathlib import Path
+
+PIPELINE_ROOT = Path(workflow.basedir).parent.resolve()
+if str(PIPELINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(PIPELINE_ROOT))
+
+from papipeline.adapters.gubbins import CORE_ALIGNMENT_BASENAME                  # noqa: E402
+from papipeline.adapters.panaroo import OUTPUT_DIRNAME as PANGENOME_DIRNAME      # noqa: E402
+from papipeline.config.loader import load_config                      # noqa: E402
+from papipeline.models import RunMode
+from papipeline.stub import stub_report_name                                 # noqa: E402
+from papipeline.logging_utils import configure_logging                # noqa: E402
+from papipeline.run import (                                             # noqa: E402
+    STAGE_ORDER,
+    pdc_table_path,
+    resolve_mode,
+)
+
+MODE = config.get("mode", "TEST")
+MACHINE = config.get("machine", "laptop")
+# Threads, memory and the sample cap all come from the machine overlay. They are
+# deliberately not read from Snakemake kwargs, because a rule that silently
+# fell back to a default thread count is how a large-cohort run ends up
+# single-threaded. Snakemake can still *reduce* them via --cores.
+LOG_LEVEL = str(CONFIG_LOG_LEVEL := config.get("log_level", "INFO"))
+
+configure_logging(LOG_LEVEL)
+
+CONFIG = load_config(Path(PIPELINE_ROOT) / "config" / "science.yaml", machine=MACHINE)
+RESOLVED_MODE = resolve_mode(MODE, CONFIG)
+# The results redirect is config's business, not the workflow's: every rule
+# shells out to a separate process that recomputes its own paths from config,
+# so an override set only here would be seen by the DAG and not by the stage
+# that writes the file - the run would report success while writing into the
+# real results tree. See PipelineConfig.results_root.
+RESULTS_ROOT = CONFIG.results_root(RESOLVED_MODE)
+INTERMEDIATE = CONFIG.intermediate_root(RESOLVED_MODE)
+REPORTS_ROOT = CONFIG.reports_root(RESOLVED_MODE)
+STAGE_DIR = INTERMEDIATE / "stages"
+DATA_ROOT = CONFIG.data_root(RESOLVED_MODE)
+# Config owns this too, including the fact that TEST reads data-rooted
+# fixtures while every other mode reads tool output back out of the run's own
+# intermediate directory. Restating the rule here is how the two drift apart.
+TOOL_OUTPUT_ROOT = CONFIG.tool_output_root(RESOLVED_MODE)
+THREADS = int(CONFIG.threads)
+MEMORY_MB = int(CONFIG.memory_mb)
+LOG_DIR = RESULTS_ROOT / "logs"
+# Where the dashboard's event stream is written. Read from the machine overlay
+# rather than hard-coded, like every other path.
+# No backslash line-continuation here: a Snakefile is not pure Python, and
+# Snakemake's own tokenizer rejects a continued expression with a syntax error
+# that points at an unrelated rule hundreds of lines away.
+# `--config status_log=<path>` redirects the workflow's event stream, for the
+# same reason `results_root` exists: a test must not append to the developer's
+# real events.jsonl, or read back events from an earlier run.
+#
+# Named "the dashboard feed" in an earlier comment, which was wrong: nothing in
+# papipeline reads this file. The observatory serves /api/events from an
+# in-process EventBus. See emit.py's docstring, which makes the same claim.
+_STATUS_LOG_OVERRIDE = config.get("status_log")
+if _STATUS_LOG_OVERRIDE:
+    STATUS_LOG = str(_STATUS_LOG_OVERRIDE)
+else:
+    _STATUS_DIR = PIPELINE_ROOT / "status"
+    if CONFIG.machine is not None:
+        _STATUS_DIR = CONFIG.machine.status_dir()
+    STATUS_LOG = str(_STATUS_DIR / "events.jsonl")
+ANTIBIOTIC = str(
+    (CONFIG.raw.get("project") or {}).get("primary_antibiotic")
+    or CONFIG.antibiotics[0]
+)
+
+RUN_STAGE = str(PIPELINE_ROOT / "scripts" / "common" / "run_stage.py")
+RUN_PIPELINE = str(PIPELINE_ROOT / "scripts" / "common" / "run_pipeline.py")
+MAKE_FIXTURES = str(PIPELINE_ROOT / "scripts" / "common" / "make_synthetic_data.py")
+WRITE_PROVENANCE = str(PIPELINE_ROOT / "scripts" / "common" / "write_provenance.py")
+
+def stage_inputs(produced=(), external=(), test_only=(), real_only=()):
+    """Snakemake inputs for a stage rule, split by mode.
+
+    `produced` are outputs of other rules in this Snakefile, so they are always
+    real Snakemake dependencies. `external` is everything a stage reads from
+    disk that no rule here produces: the sample manifest, the committed TEST
+    fixtures, the upstream tool output under the intermediate root.
+
+    STUB fabricates every stage output from nothing and runs with no fixture on
+    disk (spec.md, D8), so the external files do not exist and must not be
+    demanded - otherwise the DAG cannot resolve, which is the one thing STUB
+    exists to prove. TEST and REAL declare them for real, so a missing upstream
+    file still fails at DAG-build time rather than part-way through a run.
+
+    `test_only` is stand-in fixtures, demanded in TEST and **never in REAL**.
+    A stand-in is a committed table standing in for a stage that is not built;
+    feeding one to a REAL run would pass a fabricated table off as that stage's
+    result, which is the exact substitution `StandInError` exists to refuse.
+    REAL therefore reaches these rules with no stand-in edge at all, and a REAL
+    run of an unbuilt stage fails by *refusing*, which is honest, rather than
+    by *consuming a fixture*, which is not.
+
+    `real_only` is the mirror: an input that exists **only** in REAL, demanded
+    in REAL and never in TEST or STUB. Stage 8's core gene alignment is the
+    case. Panaroo runs in REAL only - in TEST the pangenome partition is built
+    from the annotation table - so no such alignment exists under the TEST
+    intermediate root. Declaring it in `external` would make `snakemake -n`
+    fail on a file that by construction cannot be there, which would make the
+    dry run a check that the TEST tree has a panaroo product rather than a check
+    that the DAG resolves.
+    """
+    if RESOLVED_MODE == RunMode.STUB:
+        return list(produced) + list(CONFIG_FILES)
+    declared = list(produced) + list(external)
+    if RESOLVED_MODE == RunMode.TEST:
+        declared = declared + list(test_only)
+    else:
+        declared = declared + list(real_only)
+    return declared + list(CONFIG_FILES)
+
+
+CONFIG_FILES = [
+    str(PIPELINE_ROOT / "config" / f)
+    for f in (
+        "science.yaml",
+        "machines/laptop.yaml",
+        "machines/bigmachine.yaml",
+        "antibiotics.tsv",
+        "mechanisms.tsv",
+        "regulators.tsv",
+        "references.tsv",
+    )
+]
+
+METADATA = str(DATA_ROOT / "metadata" / "sample_metadata.tsv")
+# The phenotype table, from the accessor the READER uses.
+#
+# It used to be spelled `DATA_ROOT / "phenotype" / f"{ANTIBIOTIC}_phenotype.tsv"`,
+# which is a second, independent definition of a location the config already
+# owns - and under a smoke overlay the two do not agree: `phenotype_dir` returns
+# `db/smoke_phenotypes/` for exactly the reason `smoke.yaml:77-82` gives
+# (`data/phenotype/` is the full cohort's directory and is empty), so the DAG
+# demanded file A and stage 11 read file B. D2, and the same class of drift
+# `PHYLO_DIR` below records for `tree_metadata.tsv`.
+PHENOTYPE = str(Path(CONFIG.phenotype_dir(RESOLVED_MODE)) / f"{ANTIBIOTIC}_phenotype.tsv")
+# The PDC isolate table, and the input that decides WHICH of METADATA and this is
+# the cohort.
+#
+# D1 and D7, and they are one defect. Under a smoke overlay the cohort is built
+# from this file and from nothing else: `run.discover_run_manifest` reads it
+# directly and writes no `sample_metadata.tsv`, in the same source, on purpose
+# ("A populated copy would be a second statement of the cohort, free to drift
+# from the first"). So demanding `METADATA` here asks Snakemake for a file the
+# design requires NOT to exist, and demanding nothing asks for nothing - the
+# table was required by sixteen stages and declared by none, so `snakemake
+# --dry-run` reported a complete DAG and every stage then died at manifest load.
+#
+# So the cohort input is chosen by the overlay, the same way the code chooses it,
+# and named once. `COHORT_INPUT` is the only thing a rule should demand; spelling
+# `METADATA` at fifteen call sites is how the two lists drifted apart in the
+# first place.
+PDC_TABLE = str(pdc_table_path(CONFIG))
+COHORT_INPUT = PDC_TABLE if CONFIG.is_smoke_overlay() else METADATA
+#: What `rule synthetic_fixtures` produces, which is TEST and STUB only.
+#:
+#: It used to declare `output: METADATA` unconditionally, so in REAL Snakemake
+#: treated the cohort manifest as a *product* of the synthetic-fixture generator
+#: and never checked it. That is worse than a missing input: a REAL run whose
+#: operator had not supplied `data/metadata/sample_metadata.tsv` would have had
+#: one fabricated for it - twenty `TEST_PA_*` rows and no real cohort - and the
+#: DAG would have resolved while reporting a run over the wrong isolates. It also
+#: meant the REAL dry run never named the manifest as an operator-provisioned
+#: external, which is the property this file exists to make visible.
+#:
+#: An EMPTY list, not a renamed output: in REAL the rule has nothing legitimate
+#: to produce, so it becomes an orphan and is never scheduled. `stage_inputs`
+#: demands `COHORT_INPUT` as an external in REAL, so the DAG stops on it by name.
+#:
+#: `METADATA` and not `COHORT_INPUT`: the fixture generator writes the *non-smoke*
+#: manifest at `data/metadata/`, and under a smoke overlay it is not what any
+#: stage reads. A smoke run gets its cohort from `PDC_TABLE`, which no rule here
+#: produces and never will - it is real clinical data (AGENTS.md rule 4).
+SYNTHETIC_FIXTURE_OUTPUTS = (
+    [] if RESOLVED_MODE is RunMode.REAL else [METADATA]
+)
+# NOT discovered here. `data/genomes/` is empty in the real layout, so this
+# glob resolved to an empty list and a REAL run saw no assemblies at all.
+# Assemblies are located per sample by papipeline.assemblies.locate_assembly,
+# driven by the manifest the rules already declare. One source of truth.
+#
+# **This glob is TEST-only, and that is the D8 fix.** It is evaluated ONCE, at
+# DAG-build time. On a fresh worktree the directory does not exist, the glob
+# returns `[]`, and `rule annotation` and `rule pangenome` silently receive ZERO
+# annotation input edges - a missing input and an empty cohort become
+# indistinguishable at DAG-build time, which is the failure this file's externals
+# exist to prevent. In TEST the files are committed fixtures and the glob is
+# honest. In REAL they are produced by `rule annotation` itself, so demanding
+# them there is the self-edge `TREE_IN` was fixed for. Empty in REAL for both
+# reasons at once, and `stage_inputs(test_only=...)` is the channel that says so.
+ANNOTATION = (
+    sorted(str(p) for p in (TOOL_OUTPUT_ROOT / "annotation").glob("*.tsv"))
+    if RESOLVED_MODE is RunMode.TEST
+    else []
+)
+# Stage 3's, 4's, 5's and 12a's stage INPUT tables, under the tool-output root.
+#
+# **All four were self-edges (D3, D4, D5, D6) and all four are now TEST-only.**
+# Each is written by the very rule that demanded it as an external:
+# `mlst._write_mlst_results` (`mlst.py:263`), `amr._write_determinant_table`
+# (`amr.py:620`), `sv._write_sv_tsv` (`sv.py:290`), `virulence._write_virulence_tsv`
+# (`virulence.py:203`) and, since round 12, `gwas_features.produce_gwas_features`
+# (`gwas_features.py:751`), which `run.py` calls inside its `pangenome` branch. So
+# `snakemake --dry-run --config mode=REAL` could only satisfy them by the operator
+# hand-placing four files that the rules demanding them write - which is how a
+# REAL DAG "resolves" while stage 4 has nothing to do.
+#
+# TEST-only, because in TEST they are committed fixtures and the stage reads them
+# rather than computing them (`stages.*.run`'s TEST branch). Demanding them in
+# TEST is honest; demanding them in REAL is the self-edge. The same shape as
+# `TREE_IN`, which `workflow/Snakefile` already records as fixed.
+MLST_IN = str(TOOL_OUTPUT_ROOT / "mlst" / "mlst_results.tsv")
+AMR_IN = str(TOOL_OUTPUT_ROOT / "amr" / "amr_determinants.tsv")
+SV_IN = str(TOOL_OUTPUT_ROOT / "structural_variants" / "structural_variants.tsv")
+VF_IN = str(TOOL_OUTPUT_ROOT / "virulence" / "virulence_factors.tsv")
+GWAS_IN = str(TOOL_OUTPUT_ROOT / "gwas" / "gwas_features.tsv")
+# From the config accessor, not DATA_ROOT. 33ad628 moved stage 9's real output
+# off the assembly root into `results/real/intermediate/phylogeny`, but these two
+# constants still spelled the path from DATA_ROOT - a second, independent
+# definition of a location the config already owns. The two drifted apart and the
+# DAG became unbuildable:
+#
+#     MissingInputException in rule cooccurrence
+#       affected files: data/phylogeny/tree_metadata.tsv
+#
+# `data/` is read-only and holds no phylogeny output at all for the laptop
+# overlay, so that path could never resolve. One source of truth, matching the
+# writer.
+PHYLO_DIR = CONFIG.phylogeny_dir(RESOLVED_MODE)
+# Stage 9's OWN outputs, not externals. `stages/phylogeny.build_tree_outputs`
+# writes both of them into `phylogeny_dir`, and stage 9 is their only producer -
+# so declaring them `external` made the rule demand as inputs the very files it
+# is supposed to produce. A REAL dry run could only satisfy that demand by the
+# operator hand-placing a tree on disk, which is a DAG that builds while stage 9
+# has nothing to do, and it is why the REAL DAG never resolved.
+#
+# Declared as OUTPUTS of `rule phylogeny` instead, so every downstream reader
+# (`similarity`, `gwas`, `convergence`, `cooccurrence`) gets a real Snakemake
+# edge to the rule that writes them rather than a hand-placed file. The names
+# come from the same place the writer uses: `CONFIG.phylogeny_dir()`.
+TREE_IN = str(PHYLO_DIR / "tree.nwk")
+TREE_META_IN = str(PHYLO_DIR / "tree_metadata.tsv")
+# Stage 8's input, and the reason this constant exists at all.
+#
+# Stage 8 used to consume `pangenome_summary.tsv`, a metric/value tally that
+# contains no sequence. A gubbins run can never be satisfied by it, so the rule
+# demanded a file that said nothing about the thing it gated.
+#
+# Both names come from their owners rather than being spelled here: the
+# subdirectory from `adapters.panaroo.OUTPUT_DIRNAME`, the basename from
+# `adapters.gubbins.CORE_ALIGNMENT_BASENAME`, and the root from
+# `CONFIG.intermediate_root()` via `INTERMEDIATE`. A literal in this file would
+# be a second definition of a location the code already owns, which is how
+# `TREE_IN`/`TREE_META_IN` drifted once already (see the note above).
+#
+# REAL only. Panaroo runs in REAL; in TEST the pangenome partition is built from
+# the annotation table, so no core gene alignment exists under the TEST
+# intermediate root. Declared `str(...)` at module level so it is recognised as
+# a resolved path rather than an orphan, exactly as TREE_IN is.
+CORE_ALIGNMENT_IN = str(INTERMEDIATE / PANGENOME_DIRNAME / CORE_ALIGNMENT_BASENAME)
+
+OUT_VALIDATION = str(STAGE_DIR / "01_validation.tsv")
+OUT_ANNOTATION = str(STAGE_DIR / "02_annotation_summary.tsv")
+OUT_MLST = str(STAGE_DIR / "03_mlst.tsv")
+OUT_AMR = str(STAGE_DIR / "04_amr.tsv")
+# Internal steps, folded per spec.md:351. Not stages any more, but still
+# written, still consumed, and their filenames match INTERNAL_TABLES.
+OUT_MECHANISMS = str(STAGE_DIR / "05_mechanisms.tsv")   # -> cooccurrence
+# The regulators screen runs inside stage 6 and writes its own table. Its name
+# comes from INTERNAL_TABLES["regulators"]; declaring a second path here is how
+# the writer and the DAG drift apart.
+OUT_REGULATORS = str(STAGE_DIR / "06_regulators.tsv")   # -> variants
+OUT_SV = str(STAGE_DIR / "07_structural_variants.tsv")  # -> amr
+OUT_MASTER = str(STAGE_DIR / "15_master_table.tsv")      # -> reporting
+OUT_VIRULENCE = str(STAGE_DIR / "08_virulence.tsv")
+OUT_PANGENOME = str(STAGE_DIR / "pangenome_summary.tsv")
+OUT_PANGENOME_GPA = str(STAGE_DIR / "gene_presence_absence.tsv")
+OUT_PANGENOME_CORE = str(STAGE_DIR / "core_genes.tsv")
+OUT_PANGENOME_ACC = str(STAGE_DIR / "accessory_genes.tsv")
+OUT_PHYLO = str(STAGE_DIR / "10_phylogeny.tsv")
+# Stage 6 and its cohort merge are implemented (ticket 14, f5573f5), similarity
+# followed (f1c6f5c), and recombination with it. Nothing in `STAGE_ORDER` is
+# unbuilt.
+#
+# Stand-in fixtures existed so TEST had input for a stage that was not built.
+# They were TEST-only by construction and `STANDIN_DIR` used to point at
+# `data/standins/...` - a directory that does not exist and never can, since
+# `data/` is read-only - so REAL must not demand them at all; see
+# `stage_inputs(test_only=...)`. The mechanism stays in `stage_inputs` for the
+# next declared-but-unbuilt stage; this file now uses none of it.
+OUT_VARIANTS = str(STAGE_DIR / "variants.tsv")
+OUT_COHORT_VARIANTS = str(STAGE_DIR / "cohort_variants.tsv")
+OUT_RECOMBINATION = str(STAGE_DIR / "recombination.tsv")
+OUT_SIMILARITY = str(STAGE_DIR / "similarity.tsv")
+# `standins.UNBUILT_WITH_STANDIN` is EMPTY: every stage in STAGE_ORDER computes
+# its own output. `variants` left the tuple in f5573f5, `similarity` in 2223332,
+# and `recombination` in the `dag-resolve` reconciliation. So there is no
+# `*_STANDIN` constant to declare and no `test_only=` edge anywhere in this file.
+#
+# The committed fixture *files* under `test_data/standins/unbuilt_stages/` are
+# deliberately left on disk and are now unreferenced. Deleting them is separate
+# cleanup: `tests/unit/test_standins.py` asserts a file exists for every stage the
+# tuple lists, so the two have to move together. See TASKS.md.
+OUT_PHENOTYPE = str(STAGE_DIR / "11_phenotype.tsv")
+OUT_GWAS = str(STAGE_DIR / "12_gwas.tsv")
+OUT_CONVERGENCE = str(STAGE_DIR / "13_convergence.tsv")
+OUT_COOCCURRENCE = str(STAGE_DIR / "14_cooccurrence.tsv")
+OUT_FIGURES = str(STAGE_DIR / "16_figure_manifest.tsv")
+# The reporter picks this basename from config and swaps it in REAL mode
+# (stages/reporting.py:write_report). Read it from the same place rather
+# than repeating the literal, which would be wrong in REAL mode.
+REPORT_NAME = stub_report_name(CONFIG, RESOLVED_MODE)
+OUT_REPORT_MD = str(REPORTS_ROOT / f"{REPORT_NAME}.md")
+OUT_REPORT_HTML = str(REPORTS_ROOT / f"{REPORT_NAME}.html")
+OUT_MANIFEST = str(RESULTS_ROOT / "run_manifest.json")
+
+
+# -----------------------------------------------------------------------------
+# rules
+# -----------------------------------------------------------------------------
+
+
+rule all:
+    """Default target: the report."""
+    input:
+        OUT_REPORT_MD,
+
+
+rule provenance:
+    """Run manifest recording tool, version, database and command provenance."""
+    input:
+        OUT_REPORT_MD,
+    output:
+        OUT_MANIFEST,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "provenance.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage provenance --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {WRITE_PROVENANCE} --mode {MODE} --log-file {log} 2>&1"
+
+
+rule synthetic_fixtures:
+    """Regenerate the synthetic TEST fixtures (seeded, byte-reproducible).
+
+    Declares no output in REAL - see `SYNTHETIC_FIXTURE_OUTPUTS` for why, and
+    why an empty list rather than a different filename. In REAL this rule is
+    unreachable and Snakemake never schedules it.
+    """
+    output:
+        SYNTHETIC_FIXTURE_OUTPUTS,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "synthetic_fixtures.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage synthetic_fixtures --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {MAKE_FIXTURES} --out-dir {DATA_ROOT} --log-file {log} 2>&1"
+
+
+rule validation:
+    """Stage 1: genome validation."""
+    input:
+        stage_inputs([], [COHORT_INPUT]),
+    output:
+        OUT_VALIDATION,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "01_validation.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage validation --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage validation --log-file {log} 2>&1"
+
+
+rule annotation:
+    """Stage 2: genome annotation (Bakta parser / standardised records)."""
+    input:
+        stage_inputs([], [COHORT_INPUT], test_only=ANNOTATION),
+    output:
+        OUT_ANNOTATION,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "02_annotation.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage annotation --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage annotation --log-file {log} 2>&1"
+
+
+rule mlst:
+    """Stage 3: MLST."""
+    input:
+        stage_inputs([], [COHORT_INPUT], test_only=[MLST_IN]),
+    output:
+        OUT_MLST,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "03_mlst.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage mlst --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage mlst --log-file {log} 2>&1"
+
+
+rule amr:
+    """Stage 4: AMR detection, plus the structural-variant screen folded in.
+
+    spec.md:351 folds `structural_variants` into `amr`: it normalises a tool's
+    SV table, so it belongs with the other screen and needs no ticket-14 input.
+    """
+    input:
+        stage_inputs([], [COHORT_INPUT], test_only=[AMR_IN, SV_IN]),
+    output:
+        OUT_AMR,
+        OUT_SV,  # structural_variants, folded in per spec.md:351
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "04_amr.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage amr --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage amr --log-file {log} 2>&1"
+
+
+rule variants:
+    """Stage 6: SNP/indel calling vs PAO1, plus the folded regulator screen.
+
+    Built, not pending: the per-isolate caller landed in 24ff924 and its dispatch
+    in f5573f5, with the cohort merge alongside. This rule's docstring used to
+    claim ticket 14 was still open and it used to demand a stand-in fixture for
+    a stage that has an implementation - the same half-reconciliation f1c6f5c
+    fixed for `similarity`, and invisible because nothing inspected rule
+    metadata.
+
+    Folds in the `regulators` chromosomal screen per spec.md:351, so it emits
+    TWO tables: the per-isolate calls, and `06_regulators.tsv` for the screen
+    that filters them to the loci in `config/regulators.tsv`.
+
+    It previously declared `REGULATOR_IN` as an input - a pre-fold path reading
+    `intermediate/regulators/regulator_variants.tsv`, which no rule produced and
+    only the TEST fixture generator ever wrote. That made the DAG unresolvable
+    in REAL. The screen's real output is this rule's own second output, so it is
+    declared here rather than consumed as an external file with no producer.
+    """
+    input:
+        stage_inputs([OUT_AMR], [COHORT_INPUT]),
+    output:
+        OUT_VARIANTS,
+        OUT_REGULATORS,  # regulators screen, folded in per spec.md:351
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "06_variants.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage variants --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage variants --log-file {log} 2>&1"
+
+
+rule cohort_variants:
+    """Stage 6a: cohort-wide merge of the per-isolate calls. Built in 4b5d2ff,
+
+    Distinct from `variants` above, which is per-sample. This rule is genuinely
+    cohort-wide: one row per position where isolates disagree, across the whole
+    cohort, so species-wide fixed differences do not read as polymorphisms.
+
+    Kept as a separate rule rather than a phase of `variants` because the
+    per-sample/cohort distinction is load-bearing in this DAG. Its output
+    contract is still open (docs/design/cohort-variant-merge.md), so the header
+    here is provisional and carries no consumer yet.
+    """
+    input:
+        stage_inputs([OUT_VARIANTS], [COHORT_INPUT]),
+    output:
+        OUT_COHORT_VARIANTS,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "06a_cohort_variants.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage cohort_variants --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} "
+        "--stage cohort_variants --log-file {log} 2>&1"
+
+
+rule recombination:
+    """Stage 8: recombination masking (gubbins). Built; see
+    docs/design/recombination-contract.md.
+
+    The input was `OUT_PANGENOME` (`pangenome_summary.tsv`), a two-column
+    metric/value tally. A gubbins run can never satisfy it: the stage's input is
+    an ALIGNMENT, and `pangenome_summary.tsv` contains no sequence and no
+    per-isolate column. The rule therefore demanded a file that says nothing
+    about the thing it was gating, and a DAG that built would have looked
+    correct while the stage had no input.
+
+    It now demands the core gene alignment the stage actually reads, as a
+    `real_only` edge. `real_only` because panaroo runs in REAL only: in TEST the
+    pangenome partition is built from the annotation table, so no core gene
+    alignment exists under the TEST intermediate root and demanding one would
+    break the dry run on a file that cannot exist. The path comes from
+    `adapters.panaroo.OUTPUT_DIRNAME`, `adapters.gubbins.CORE_ALIGNMENT_BASENAME`
+    and `CONFIG.intermediate_root()`, so the workflow and the code that reads the
+    file cannot disagree about where it is.
+
+    **In TEST this rule takes no input edge at all**, and that is the point. It
+    used to take a `test_only` edge to a fabricated `STAND-IN FIXTURE` table,
+    satisfying the edge from stage 9 while the stage was unbuilt. `dag-resolve`
+    dispatched stage 8, so TEST now reads committed gubbins-shaped output from
+    `test_data/intermediate/gubbins/` through
+    `run.derive_recombination_tables`, which is real input to the real parser
+    rather than a stand-in for its output. Keeping the fixture edge would have
+    meant the DAG demanded a fabricated table for a stage that computes a real
+    one, which is the exact substitution `StandInError` exists to refuse.
+    """
+    input:
+        stage_inputs(
+            [],
+            [COHORT_INPUT],
+            real_only=[CORE_ALIGNMENT_IN],
+        ),
+    output:
+        OUT_RECOMBINATION,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "08_recombination.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage recombination --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage recombination --log-file {log} 2>&1"
+
+
+rule similarity:
+    """Stage 10: phylogenetic distance from the stage-9 tree. Built in 2223332."""
+    input:
+        stage_inputs([OUT_PHYLO], [COHORT_INPUT, TREE_META_IN]),
+    output:
+        OUT_SIMILARITY,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "10_similarity.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage similarity --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage similarity --log-file {log} 2>&1"
+
+
+rule virulence:
+    """Stage 5: virulence analysis (independent of AMR)."""
+    input:
+        stage_inputs([], [COHORT_INPUT], test_only=[VF_IN]),
+    output:
+        OUT_VIRULENCE,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "05_virulence.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage virulence --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage virulence --log-file {log} 2>&1"
+
+
+rule pangenome:
+    """Stage 7: pan-genome."""
+    input:
+        stage_inputs([], [COHORT_INPUT], test_only=ANNOTATION),
+    output:
+        OUT_PANGENOME,
+        OUT_PANGENOME_GPA,
+        OUT_PANGENOME_CORE,
+        OUT_PANGENOME_ACC,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "09_pangenome.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage pangenome --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage pangenome --log-file {log} 2>&1"
+
+
+rule phylogeny:
+    """Stage 9: phylogenomics, with strict tree/manifest validation.
+
+    spec.md D1 puts stage 8 (`recombination`) upstream of stage 9, so
+    `OUT_RECOMBINATION` is a produced input.
+
+    **`tree.nwk` and `tree_metadata.tsv` are OUTPUTS of this rule**, not
+    externals. `stages/phylogeny.build_tree_outputs` writes both into
+    `phylogeny_dir` with IQ-TREE, and this rule is their only producer. They used
+    to be declared in the `external` list, which asked Snakemake to resolve as
+    inputs the files the rule itself produces - so the REAL DAG could never be
+    built from nothing, and satisfying it meant placing a tree on disk by hand.
+    Every downstream rule that reads them (`similarity`, `gwas`, `convergence`,
+    `cooccurrence`) now gets a real edge from here instead.
+
+    Note what this does NOT do: it does not make the tree's *input* exist. The
+    alignment stage 9 reads is `core_snp_alignment.fasta`, written into the same
+    directory by stage 8 (`recombination`) in REAL and by a committed fixture in
+    TEST. That file is still an external, because nothing in this workflow
+    produces it in TEST.
+    """
+    input:
+        stage_inputs([OUT_RECOMBINATION], [COHORT_INPUT]),
+    output:
+        OUT_PHYLO,
+        TREE_IN,
+        TREE_META_IN,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "10_phylogeny.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage phylogeny --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage phylogeny --log-file {log} 2>&1"
+
+
+rule phenotype:
+    """Stage 11: imipenem phenotype interface."""
+    input:
+        stage_inputs([], [COHORT_INPUT, PHENOTYPE]),
+    output:
+        OUT_PHENOTYPE,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "11_phenotype.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage phenotype --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage phenotype --log-file {log} 2>&1"
+
+
+rule gwas:
+    """Stage 12: imipenem GWAS.
+
+    spec.md D6 makes the SNP/indel features from stage 6 a required input family,
+    so the edge to `variants` is declared literally. Stage 6 is unbuilt, so in
+    TEST and REAL its table comes from a committed stand-in fixture.
+    """
+    input:
+        stage_inputs([OUT_PANGENOME_GPA, OUT_VARIANTS],
+                     [COHORT_INPUT, PHENOTYPE, TREE_META_IN],
+                     test_only=[GWAS_IN]),
+    output:
+        OUT_GWAS,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "12_gwas.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage gwas --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage gwas --log-file {log} 2>&1"
+
+
+rule convergence:
+    """Stage 13: convergence analysis in phylogenetic context."""
+    input:
+        stage_inputs([OUT_AMR], [COHORT_INPUT, TREE_META_IN]),
+    output:
+        OUT_CONVERGENCE,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "13_convergence.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage convergence --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage convergence --log-file {log} 2>&1"
+
+
+rule cooccurrence:
+    """Stage 14: co-occurrence across determinant classes.
+
+    spec.md:351 folds `mechanisms` in here: the classes whose co-occurrence is
+    tested are the mechanism classes, so this rule produces the mechanism table
+    rather than consuming it.
+    """
+    input:
+        stage_inputs([OUT_AMR, OUT_VARIANTS, OUT_SV, OUT_ANNOTATION], [COHORT_INPUT, TREE_META_IN]),
+    output:
+        OUT_COOCCURRENCE,
+        OUT_MECHANISMS,  # mechanisms, folded in per spec.md:351
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "14_cooccurrence.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage cooccurrence --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_STAGE} --mode {MODE} --machine {MACHINE} --stage cooccurrence --log-file {log} 2>&1"
+
+
+rule reporting:
+    """Stage 15: master table, figure data and the report.
+
+    spec.md:351 folds `integration` in here: the master table exists in order to
+    be reported, so this rule depends on everything the table is built from and
+    produces that table itself.
+    """
+    input:
+        stage_inputs([OUT_AMR, OUT_MECHANISMS, OUT_MLST, OUT_VIRULENCE, OUT_GWAS,
+                      OUT_CONVERGENCE, OUT_PHYLO, OUT_PHENOTYPE, OUT_VARIANTS,
+                        OUT_RECOMBINATION, OUT_SIMILARITY, OUT_VALIDATION,
+                        OUT_COHORT_VARIANTS],
+                     [COHORT_INPUT, PHENOTYPE]),
+    output:
+        OUT_REPORT_MD,
+        OUT_REPORT_HTML,
+        OUT_FIGURES,
+        OUT_MASTER,  # integration, folded in per spec.md:351
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "15_reporting.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage reporting --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_PIPELINE} --mode {MODE} --machine {MACHINE} --log-file {log} 2>&1"
+
+
+rule full_run:
+    """Run all sixteen stages in ONE process. **This is the production path.**
+
+    It used to declare `input: OUT_REPORT_MD`, which is the edge that made it
+    expensive rather than efficient: `OUT_REPORT_MD` is produced by
+    `rule reporting`, whose input block names a dozen stage tables, so asking for
+    `full_run` scheduled every per-stage rule FIRST - and each of those is a
+    separate `run_pipeline --only <stage>` that recomputes its prerequisites
+    in-process. E2E-DISCOVER measured the cost (D15): invoking `rule variants`,
+    whose only new work is nucmer, logged `--- stage amr ---` first, and stage 6
+    would have paid 38 min of AMRFinderPlus plus 68 min of Bakta before reaching
+    nucmer. Nine remaining stages at that rate is ~16 h for ~30 min of work.
+
+    So this rule declares **no stage-table input at all**. It asks for the config
+    files and nothing else, and `run_pipeline` executes all sixteen stages once in
+    one process, writing every declared output including this rule's. Each stage
+    runs ONCE on this path, which is the property the rule's name claims.
+
+    **Prerequisite semantics are untouched.** `run.py`'s `PREREQUISITES` is
+    unchanged, so `--only <stage>` still expands to a stage plus what it needs;
+    what changed is that the production path no longer goes through the per-stage
+    rules at all.
+
+    The per-stage rules above remain, and remain correct, for running ONE stage
+    against a results tree a previous full run produced. That is what they are
+    for. They are not on the path a full run takes.
+    """
+    input:
+        CONFIG_FILES,
+    output:
+        OUT_MANIFEST,
+    threads: THREADS
+    resources:
+        mem_mb=MEMORY_MB
+    log:
+        str(LOG_DIR / "full_run.log"),
+    shell:
+        "python3 " + str(PIPELINE_ROOT / "scripts" / "run_rule.py")
+        + " --stage full_run --status-log " + str(STATUS_LOG) + " -- "
+        "python3 {RUN_PIPELINE} --mode {MODE} --machine {MACHINE} --log-file {log} 2>&1"
+
+
+rule clean_results:
+    """Remove this mode's results directory. Inputs are never touched."""
+    run:
+        import shutil
+
+        if RESULTS_ROOT.exists():
+            print(f"Removing {RESULTS_ROOT}")
+            shutil.rmtree(RESULTS_ROOT)
+        else:
+            print(f"Nothing to remove at {RESULTS_ROOT}")
+
+
+rule list_stages:
+    """Print the stages and their execution order."""
+    run:
+        for index, stage in enumerate(STAGE_ORDER, start=1):
+            print(f"{index:2d}. {stage}")

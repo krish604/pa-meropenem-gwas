@@ -1,0 +1,23 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+sample_id	tree_tip_label	lineage_label	st	source
+TEST_PA_001	TEST_PA_001	LINEAGE_A	2	synthetic_generator
+TEST_PA_002	TEST_PA_002	LINEAGE_B	3	synthetic_generator
+TEST_PA_003	TEST_PA_003	LINEAGE_C	7	synthetic_generator
+TEST_PA_004	TEST_PA_004	LINEAGE_A	2	synthetic_generator
+TEST_PA_005	TEST_PA_005	LINEAGE_B	3	synthetic_generator
+TEST_PA_006	TEST_PA_006	LINEAGE_C	2	synthetic_generator
+TEST_PA_007	TEST_PA_007	LINEAGE_A	11	synthetic_generator
+TEST_PA_008	TEST_PA_008	LINEAGE_B	5	synthetic_generator
+TEST_PA_009	TEST_PA_009	LINEAGE_C	3	synthetic_generator
+TEST_PA_010	TEST_PA_010	LINEAGE_A	7	synthetic_generator
+TEST_PA_011	TEST_PA_011	LINEAGE_B	12	synthetic_generator
+TEST_PA_012	TEST_PA_012	LINEAGE_C	8	synthetic_generator
+TEST_PA_013	TEST_PA_013	LINEAGE_A	3	synthetic_generator
+TEST_PA_014	TEST_PA_014	LINEAGE_B	10	synthetic_generator
+TEST_PA_015	TEST_PA_015	LINEAGE_C	10	synthetic_generator
+TEST_PA_016	TEST_PA_016	LINEAGE_A	11	synthetic_generator
+TEST_PA_017	TEST_PA_017	LINEAGE_B	7	synthetic_generator
+TEST_PA_018	TEST_PA_018	LINEAGE_C	3	synthetic_generator
+TEST_PA_019	TEST_PA_019	LINEAGE_A	4	synthetic_generator
+TEST_PA_020	TEST_PA_020	LINEAGE_B	12	synthetic_generator

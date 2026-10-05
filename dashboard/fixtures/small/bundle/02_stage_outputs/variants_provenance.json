@@ -1,0 +1,54 @@
+{
+  "per_isolate": [
+    {
+      "sample_id": "TEST_PA_001",
+      "n_snv": 0,
+      "n_indel": 0
+    },
+    {
+      "sample_id": "TEST_PA_002",
+      "n_snv": 1,
+      "n_indel": 1
+    },
+    {
+      "sample_id": "TEST_PA_003",
+      "n_snv": 2,
+      "n_indel": 2
+    },
+    {
+      "sample_id": "TEST_PA_004",
+      "n_snv": 3,
+      "n_indel": 0
+    },
+    {
+      "sample_id": "TEST_PA_005",
+      "n_snv": 4,
+      "n_indel": 1
+    },
+    {
+      "sample_id": "TEST_PA_006",
+      "n_snv": 5,
+      "n_indel": 2
+    },
+    {
+      "sample_id": "TEST_PA_007",
+      "n_snv": 6,
+      "n_indel": 0
+    },
+    {
+      "sample_id": "TEST_PA_008",
+      "n_snv": 0,
+      "n_indel": 1
+    },
+    {
+      "sample_id": "TEST_PA_009",
+      "n_snv": 1,
+      "n_indel": 2
+    },
+    {
+      "sample_id": "TEST_PA_010",
+      "n_snv": 2,
+      "n_indel": 0
+    }
+  ]
+}

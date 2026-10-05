@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	antibiotic	determinant	gene	variant	determinant_type	mechanism	evidence_source	database	database_version	confidence	claim_status	identity_pct	coverage_pct
+TEST_PA_001	imipenem	blaNDM-1~SYNTHETIC_ALLELE	blaNDM-1	SYNTHETIC_ALLELE	acquired	acquired_determinant	synthetic_amrfinder_emulator	SYNTHETIC_DB	v0-synthetic	99.0	DETECTED	99.5	100.0
+TEST_PA_002	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.2000	0.2000
+TEST_PA_003	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.3000	0.3000
+TEST_PA_004	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.4000	0.4000
+TEST_PA_005	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.5000	0.5000
+TEST_PA_006	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.6000	0.6000
+TEST_PA_007	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.7000	0.7000
+TEST_PA_008	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.8000	0.8000
+TEST_PA_009	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.9000	0.9000
+TEST_PA_010	imipenem	synthetic_determinant	synthetic_gene		AMR	antibiotic inactivation	synthetic	synthetic_db	1.0	high	supported	0.1000	0.1000

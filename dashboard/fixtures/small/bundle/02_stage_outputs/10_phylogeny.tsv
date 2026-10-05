@@ -1,0 +1,22 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+tree	n_tips	n_internal_nodes	has_branch_lengths	matches_manifest
+stage9.nwk	1	1	true	true
+stage9.nwk	2	2	true	true
+stage9.nwk	3	3	true	true
+stage9.nwk	4	4	true	true
+stage9.nwk	5	5	true	true
+stage9.nwk	6	6	true	true
+stage9.nwk	7	7	true	true
+stage9.nwk	8	8	true	true
+stage9.nwk	9	9	true	true
+stage9.nwk	10	10	true	true
+stage9.nwk	11	11	true	true
+stage9.nwk	12	12	true	true
+stage9.nwk	13	13	true	true
+stage9.nwk	14	14	true	true
+stage9.nwk	15	15	true	true
+stage9.nwk	16	16	true	true
+stage9.nwk	17	17	true	true
+stage9.nwk	18	18	true	true
+stage9.nwk	19	19	true	true
+stage9.nwk	20	20	true	true

@@ -1,0 +1,24 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+# feature names are synthetic labels; no biological feature is implied
+sample_id	gene__oprD_absent	gene__oprD_LoF	gene__acquired_determinant	snp__TESTPOS_00100	snp__TESTPOS_00200	unitig__utg000001	unitig__utg000002	kmer__k0000001
+TEST_PA_001	0	1	1	1	0	1	0	0
+TEST_PA_002	1	0	0	0	1	0	1	0
+TEST_PA_003	0	0	0	0	0	0	0	1
+TEST_PA_004	0	0	0	0	1	1	0	0
+TEST_PA_005	0	1	0	1	0	0	1	0
+TEST_PA_006	0	0	0	0	1	0	0	1
+TEST_PA_007	0	1	0	0	0	1	0	0
+TEST_PA_008	0	0	0	0	1	0	1	0
+TEST_PA_009	0	1	0	1	0	0	0	1
+TEST_PA_010	0	0	0	0	1	1	0	0
+TEST_PA_011	0	0	1	0	0	0	1	0
+TEST_PA_012	0	0	0	1	1	0	0	1
+TEST_PA_013	0	0	0	0	0	1	0	0
+TEST_PA_014	0	0	1	1	1	0	1	0
+TEST_PA_015	0	1	1	1	0	0	0	1
+TEST_PA_016	0	0	0	1	1	1	0	0
+TEST_PA_017	0	1	1	1	0	0	1	0
+TEST_PA_018	0	1	0	1	1	0	0	1
+TEST_PA_019	0	0	0	0	0	1	0	0
+TEST_PA_020	0	1	0	0	1	0	1	0

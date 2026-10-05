@@ -1,0 +1,209 @@
+# =============================================================================
+# Machine overlay: BOUNDED REAL SMOKE RUN (macOS arm64)
+#
+# This overlay exists so a handful of real genomes can be pushed through the
+# pipeline for real, without that run being mistakable for the full-cohort
+# analysis. It is the one place this project opens a door the standing rules keep
+# shut, so each of the three guarantees below is a refusal that names what to
+# change:
+#
+#   1. `smoke_genome_dir` is REQUIRED. There is no default and no fall-through
+#      to data_root. An overlay that resolved genomes from `data/` when the key
+#      was absent would quietly analyse the full cohort while appearing to be a
+#      bounded run - the exact outcome this file prevents. db/smoke_genomes/ is
+#      empty until someone puts genomes there; that is deliberate.
+#
+#   2. `max_samples: 10`, enforced by the existing `enforce_sample_cap`. There
+#      is no second cap mechanism: two caps is one more thing to keep in step,
+#      and the laptop's 20 is enforced by the same code path.
+#
+#   3. Every report carries an asserted marker naming the actual assembly count.
+#      `papipeline.reporting.smoke.require_smoke_marker` RAISES if the marker is
+#      absent or states a different count, rather than shipping a report that
+#      looks like the real thing. A report without the marker is the failure the
+#      marker exists to catch.
+#
+# `allow_real_mode` is FALSE. Building and validating this overlay is not the
+# same as authorising a REAL run against real genomes; that is a separate,
+# explicit step, and it is not covered here. No genome has been copied into
+# db/smoke_genomes/ and nothing in this overlay has been exercised on real data.
+#
+# The tool availability block is the laptop's, copied rather than inherited: an
+# overlay is read in isolation, so omitting it would imply tools are present.
+# Stage availability is unchanged from laptop.yaml. Stage 7 (pangenome) has a
+# working tool on this machine - panaroo installs from source, not from conda -
+# but its tool is not declared below, and stage 8 (recombination) resolves
+# gubbins through tools/gubbins/, which this overlay does not put on
+# tool_search_dirs. Both stages have dispatch branches; what is missing here is
+# the tool path, so a *full* REAL run remains impossible on this machine and the
+# smoke run stays bounded. That is why it unblocks nothing.
+# =============================================================================
+
+machine: smoke
+machine_class: development
+
+# The one place in this repository where a machine overlay names a key that
+# `science.yaml` also owns, and it is here on purpose.
+#
+# `cohort.subset_file` is a SCIENCE key: WHICH isolates are in the cohort is a
+# scientific claim, not a machine preference, so `config/science.yaml` states it
+# as `null` (the whole roster) and every other overlay inherits that. This
+# overlay is the bounded real run, and "the whole roster" is precisely what it
+# exists to prevent, so it names its own ten.
+#
+# The list is `local/smoke_isolates.txt`, resolved against the REPOSITORY ROOT
+# by CohortConfig.resolve_subset_file -- not against the CWD, and not through
+# the `data`/`db` symlinks, because in a dev worktree those point at the
+# canonical checkout and the list would stop being this worktree's own.
+#
+# `local/` is gitignored (no trailing slash), so the list cannot be committed:
+#   $ git check-ignore -v local/smoke_isolates.txt
+#   .gitignore:33:local  local/smoke_isolates.txt
+cohort:
+  subset_file: local/smoke_isolates.txt
+
+# `annotation.reuse_tool_output`, which is a SCIENCE key and is therefore refused
+# in a machine overlay - except this one key, on this one overlay, under
+# OVERLAY_SCIENCE_EXEMPT_KEYS in papipeline/config/loader.py. Why it is allowed
+# at all: "is there verified pre-computed Bakta output on THIS machine?" is a
+# machine fact, exactly like `runtime.allow_real_mode` and `runtime.max_samples`
+# below. What the run does with the resulting records is science and stays in
+# science.yaml.
+#
+# `require` is the only mode in which Bakta is NEVER invoked. Without it, stage 2
+# calls `run_bakta` per sample with no reuse-if-present guard, so a bounded REAL
+# run over the ten smoke isolates spends ~68 minutes per cohort re-deriving
+# annotation that already exists - and E2E-DISCOVER did exactly that, once,
+# unknowingly (D9). `prefer` cannot answer the question either: when nothing
+# verifies it quietly runs the tool over a cohort assembled never to be annotated,
+# which is not a fallback but a second way to get the wrong answer.
+#
+# Under `require` a genome whose existing output does not verify is recorded as
+# failed WITH ITS REFUSAL NAMED, and the tool is still never invoked. One
+# unverifiable isolate therefore cannot end a cohort that is mostly unprepared by
+# construction - which is what a smoke cohort is.
+#
+# QUOTED, deliberately: YAML 1.1 reads a bare `off` as the boolean false, and
+# the loader refuses a boolean by name rather than guessing.
+annotation:
+  # `require`. Round 12 set this, then reverted it to `prefer` because the full
+  # suite went red, and the stated reason was that `require` "refuses the tool
+  # when curated output is absent, so a smoke run refuses to annotate ALL 967
+  # roster members". Both halves of that are wrong, and the reversion was the
+  # wrong fix for a real cause.
+  #
+  # THE COHORT IS TEN, NOT 967. `cohort.subset_file` below narrows the manifest
+  # to ten isolates at load time (`papipeline/run.py:501` calls
+  # `apply_cohort_subset`, which returns only the listed ids at
+  # `papipeline/run.py:640`). 967 is `discover_pdc_manifest`'s unfiltered
+  # membership - the number before the subset is applied, and the number
+  # `enforce_sample_cap` deliberately does not measure on a smoke overlay
+  # (`papipeline/run.py:645`). Several test docstrings still say "membership
+  # stays 967" and describe a pre-round-12 state in which the subset was not
+  # applied at all; they are asserting about the manifest, not about the run.
+  #
+  # WHAT ACTUALLY BLOCKS `require`: curated Bakta output has to be STAGED at
+  # `<intermediate_root>/bakta/<sample_id>/`, which is exactly where
+  # `run_bakta` would have written it (`papipeline/stages/annotation.py:909`
+  # and `decide_reuse`'s `out_root / sample.sample_id` at :690). With nothing
+  # staged, `require` annotates none of the ten and produces an empty stage -
+  # that is `require` doing its job, and it is fixed by provisioning the
+  # curated output, not by weakening the mode.
+  #
+  # `prefer` would leave Bakta reachable: it reuses verified curated output and
+  # EXECUTES BAKTA when it is absent, which is a second way to get the answer
+  # this overlay exists to avoid. A smoke run is not allowed to annotate
+  # anything; a run whose curated output is incomplete must say so by name
+  # rather than spend an hour of CPU closing the gap. Stage 2 already refuses
+  # per isolate and carries on (`papipeline/stages/annotation.py:942-950`), so
+  # one unstaged isolate costs that isolate and not the cohort.
+  reuse_tool_output: "require"
+
+paths:
+  data_root: data
+  test_data_root: test_data
+  results_root: results
+  reports_root: results/reports
+  intermediate_root: results/intermediate
+  status_dir: status
+  db_root: db
+  reference_fasta: db/reference/GCF_000006765.1/GCF_000006765.1_ASM676v1_genomic.fna
+  # REQUIRED. The loader refuses this overlay by key name when it is absent;
+  # there is no default and no path back to data_root.
+  smoke_genome_dir: db/smoke_genomes
+  # REQUIRED for the same reason. `data/phenotype/` is the full cohort's
+  # directory and is empty; a bounded run's ten-isolate table written there
+  # would sit exactly where the real one belongs. Measured calls for the ten
+  # isolates above, extracted from PDC_essential.tsv by
+  # scripts/smoke/build_smoke_phenotype.py - regenerate rather than hand-edit.
+  smoke_phenotype_dir: db/smoke_phenotypes
+  # The PDC isolate table, and this overlay is the one that REQUIRES it: the
+  # cohort is built from this file and from nowhere else, so `run.py` refuses
+  # without it (naming this key) rather than falling back to `data/metadata/`.
+  #
+  # It was required and undeclared until round 12. E2E-DISCOVER D7 measured what
+  # that costs: no rule declared it, so `snakemake --dry-run` reported a
+  # complete DAG, and then all sixteen stage invocations died at manifest load on
+  # this one file. The dry run said yes and the run said no, which is the worst
+  # failure mode in the set.
+  #
+  # RELATIVE to the repository root and never committed (`.gitignore:44`
+  # `PDC_*.tsv`, AGENTS.md rule 4: this is real clinical data). An untracked
+  # COPY at a worktree root is the supported arrangement.
+  pdc_table: PDC_essential.tsv
+
+  # nucmer is homebrew-only on osx-arm64: `mummer4` does not solve in conda
+  # (`libcxx >=18` does not exist for this architecture). Declared here so the
+  # preflight reports the truth rather than what a developer once typed.
+  tool_search_dirs:
+    - /opt/homebrew/opt/mummer/bin
+    # gubbins, relative for the reason laptop.yaml gives: this overlay exists to
+    # authorise a bounded REAL run, and stage 8 (recombination) resolves gubbins
+    # through `tools/gubbins/bin`, which scripts/build_gubbins_from_source.sh
+    # installs. Without this line the overlay whose entire purpose is to run
+    # stages 1-11 cannot resolve the tool for stage 8 (D11) - `which gubbins`
+    # inside pa-amr is "not found", so adapters/gubbins.py's PATH fallback
+    # cannot rescue it. The header of this file previously said omitting it was
+    # deliberate and "unblocks nothing"; that was a missing line described as a
+    # policy.
+    - tools/gubbins/bin
+
+runtime:
+  threads: 4
+  memory_mb: 8192
+  log_level: INFO
+  # Stays closed. See the header.
+  allow_real_mode: false
+  max_samples: 10
+  # Bounds for the vendored unique-pattern helper (step 12a). See the laptop
+  # overlay for why these are separate from this pipeline's own limits.
+  unique_patterns_memory_mb: 1024
+  unique_patterns_cores: 1
+  # See the laptop overlay for why this sits under `runtime` and not `paths`.
+  unique_patterns_temp_dir: /tmp
+  observatory:
+    # On for the smoke overlay so a run publishes its state and /api/health can
+    # show `database_present: true`. With it off, nothing wrote an execution
+    # store at all and every /api/logs/* answered "no execution store" - the
+    # dashboard had no data to display and no way to say so from its own state.
+    #
+    # Smoke-scoped deliberately: laptop and bigmachine keep it false, so an
+    # ordinary run does not start publishing stage events.
+    enabled: true
+    db: ~/.local/share/papipeline/observatory.db
+    run_key: pipeline
+
+# --- tool availability, as verified on osx-arm64 ----------------------------
+tools:
+  seqkit:      { available: true }
+  bakta:       { available: true }
+  mlst:        { available: true }
+  # Stage 4's toolchain, declared because the overlay runs that stage. Both are
+  # present in the environment, and laptop.yaml already claims both on this same
+  # machine; the omission here was a gap in the file, not a statement about the
+  # machine. `blast` is the suite name - there is no binary called `blast`, the
+  # binaries are blastn/makeblastdb - and AMRFinderPlus needs it at detection
+  # time, so a missing declaration would surface as an unexplained unknown
+  # rather than as a missing tool.
+  amrfinder:   { available: true }
+  blast:       { available: true }

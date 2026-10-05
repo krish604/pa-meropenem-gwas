@@ -1,0 +1,10 @@
+sample_id	tree_tip_label	lineage_label	st	source
+A1	A1	L1	ST1	iqtree
+A2	A2	L1	ST1	iqtree
+A3	A3	L1	ST1	iqtree
+B1	B1	L2	ST2	iqtree
+B2	B2	L2	ST2	iqtree
+B3	B3	L2	ST2	iqtree
+C1	C1	L3	ST3	iqtree
+C2	C2	L3	ST3	iqtree
+C3	C3	L3	ST3	iqtree

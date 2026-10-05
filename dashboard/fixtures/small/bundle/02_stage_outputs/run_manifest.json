@@ -1,0 +1,85 @@
+{
+  "antibiotic": "imipenem",
+  "generated_at_utc": "2026-10-05T00:00:00Z",
+  "n_samples": 10,
+  "outputs": {
+    "amr": "intermediate/stages/04_amr.tsv",
+    "annotation": "intermediate/stages/02_annotation_summary.tsv",
+    "cohort_variants": "intermediate/stages/cohort_variants.tsv",
+    "convergence": "intermediate/stages/13_convergence.tsv",
+    "cooccurrence": "intermediate/stages/14_cooccurrence.tsv",
+    "gwas": "intermediate/stages/12_gwas.tsv",
+    "mlst": "intermediate/stages/03_mlst.tsv",
+    "pangenome": "intermediate/stages/pangenome_summary.tsv",
+    "phenotype": "intermediate/stages/11_phenotype.tsv",
+    "phylogeny": "intermediate/stages/10_phylogeny.tsv",
+    "recombination": "intermediate/stages/recombination.tsv",
+    "reporting": "intermediate/stages/16_figure_manifest.tsv",
+    "similarity": "intermediate/stages/similarity.tsv",
+    "validation": "intermediate/stages/01_validation.tsv",
+    "variants": "intermediate/stages/variants.tsv",
+    "virulence": "intermediate/stages/08_virulence.tsv"
+  },
+  "pipeline_version": "0.1.0-fixture",
+  "platform": "synthetic-fixture",
+  "python": "3.11",
+  "references": [
+    {
+      "database": "synthetic_db",
+      "database_version": "1.0",
+      "reference_id": "ref_genome",
+      "tool": "bakta",
+      "tool_version": "1.9.0",
+      "version_status": "pinned"
+    }
+  ],
+  "run_mode": "TEST",
+  "samples": [
+    "TEST_PA_001",
+    "TEST_PA_002",
+    "TEST_PA_003",
+    "TEST_PA_004",
+    "TEST_PA_005",
+    "TEST_PA_006",
+    "TEST_PA_007",
+    "TEST_PA_008",
+    "TEST_PA_009",
+    "TEST_PA_010"
+  ],
+  "stages": {
+    "amr": "completed",
+    "annotation": "completed",
+    "cohort_variants": "completed",
+    "convergence": "completed",
+    "cooccurrence": "completed",
+    "gwas": "completed",
+    "mlst": "completed",
+    "pangenome": "completed",
+    "phenotype": "completed",
+    "phylogeny": "completed",
+    "recombination": "completed",
+    "reporting": "completed",
+    "similarity": "completed",
+    "validation": "completed",
+    "variants": "completed",
+    "virulence": "completed"
+  },
+  "stages_skipped": {},
+  "tools_detected": {
+    "bakta": {
+      "available": true,
+      "executable": "/usr/bin/bakta",
+      "version": "1.9.0"
+    },
+    "iqtree": {
+      "available": true,
+      "executable": "/usr/bin/iqtree2",
+      "version": "2.2.0"
+    },
+    "mlst": {
+      "available": true,
+      "executable": "/usr/bin/mlst",
+      "version": "2.23.0"
+    }
+  }
+}

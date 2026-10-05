@@ -1,0 +1,12 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	virulence_factor	gene	category	database	database_version	confidence	identity_pct
+TEST_PA_001	pyocyanin_synthesis	pyocyanin_synthesis	pigment	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_002	lasB	lasB	protease	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_003	pilA	pilA	adhesion	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_004	pilA	pilA	adhesion	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_005	pilA	pilA	adhesion	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_006	exoS	exoS	cytotoxin	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_007	pilA	pilA	adhesion	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_008	pilA	pilA	adhesion	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_009	pilA	pilA	adhesion	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0
+TEST_PA_010	pilA	pilA	adhesion	SYNTHETIC_VFDB	v0-synthetic	95.0	97.0

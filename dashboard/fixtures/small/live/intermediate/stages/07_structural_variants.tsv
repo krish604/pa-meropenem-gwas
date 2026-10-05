@@ -1,0 +1,22 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+sample_id	variant_id	variant_type	position	affected_gene	size	evidence	confidence	call_status	mge
+	sv_0001	snv	1	synthetic_gene	1	synthetic	high	called	none
+	sv_0001	snv	2	synthetic_gene	2	synthetic	high	called	none
+	sv_0001	snv	3	synthetic_gene	3	synthetic	high	called	none
+	sv_0001	snv	4	synthetic_gene	4	synthetic	high	called	none
+	sv_0001	snv	5	synthetic_gene	5	synthetic	high	called	none
+	sv_0001	snv	6	synthetic_gene	6	synthetic	high	called	none
+	sv_0001	snv	7	synthetic_gene	7	synthetic	high	called	none
+	sv_0001	snv	8	synthetic_gene	8	synthetic	high	called	none
+	sv_0001	snv	9	synthetic_gene	9	synthetic	high	called	none
+	sv_0001	snv	10	synthetic_gene	10	synthetic	high	called	none
+	sv_0001	snv	11	synthetic_gene	11	synthetic	high	called	none
+	sv_0001	snv	12	synthetic_gene	12	synthetic	high	called	none
+	sv_0001	snv	13	synthetic_gene	13	synthetic	high	called	none
+	sv_0001	snv	14	synthetic_gene	14	synthetic	high	called	none
+	sv_0001	snv	15	synthetic_gene	15	synthetic	high	called	none
+	sv_0001	snv	16	synthetic_gene	16	synthetic	high	called	none
+	sv_0001	snv	17	synthetic_gene	17	synthetic	high	called	none
+	sv_0001	snv	18	synthetic_gene	18	synthetic	high	called	none
+	sv_0001	snv	19	synthetic_gene	19	synthetic	high	called	none
+	sv_0001	snv	20	synthetic_gene	20	synthetic	high	called	none

@@ -1,0 +1,15 @@
+# STAND-IN FIXTURE - NOT STAGE OUTPUT, NOT BIOLOGICAL RESULTS
+# Stands in for spec.md D1 stage 10 (`similarity`), which has no
+# implementation. Satisfies the declared edge from stage 15 (report) to stage
+# 10 so the DAG builds in TEST.
+# One row: stage_spec() requires non_empty and min_rows(1).
+# ticket 14 builds the stage; this file is deleted then. See TASKS.md.
+#
+# Square matrix: `sample_id` leads, then one distance column per sample. The
+# column names follow the cohort and are not knowable here, so the header is
+# `sample_id` alone - which is exactly what STAGE_TABLES declares. The old
+# pair-list header (`sample_a`/`sample_b`) was replaced when the contract became
+# a matrix on 2026-09-30; this fixture was already matrix-shaped, so only the
+# leading column needed naming.
+sample_id	standin_not_computed	standin_not_computed
+STANDIN	standin_not_computed	standin_not_computed

@@ -1,0 +1,24 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+# generator_seed=20240617
+# column lineage is a generator label, not a result
+sample_id	assembly_path	lineage	data_class
+TEST_PA_001	../genomes/TEST_PA_001.fna	LINEAGE_A	synthetic_test
+TEST_PA_002	../genomes/TEST_PA_002.fna	LINEAGE_B	synthetic_test
+TEST_PA_003	../genomes/TEST_PA_003.fna	LINEAGE_C	synthetic_test
+TEST_PA_004	../genomes/TEST_PA_004.fna	LINEAGE_A	synthetic_test
+TEST_PA_005	../genomes/TEST_PA_005.fna	LINEAGE_B	synthetic_test
+TEST_PA_006	../genomes/TEST_PA_006.fna	LINEAGE_C	synthetic_test
+TEST_PA_007	../genomes/TEST_PA_007.fna	LINEAGE_A	synthetic_test
+TEST_PA_008	../genomes/TEST_PA_008.fna	LINEAGE_B	synthetic_test
+TEST_PA_009	../genomes/TEST_PA_009.fna	LINEAGE_C	synthetic_test
+TEST_PA_010	../genomes/TEST_PA_010.fna	LINEAGE_A	synthetic_test
+TEST_PA_011	../genomes/TEST_PA_011.fna	LINEAGE_B	synthetic_test
+TEST_PA_012	../genomes/TEST_PA_012.fna	LINEAGE_C	synthetic_test
+TEST_PA_013	../genomes/TEST_PA_013.fna	LINEAGE_A	synthetic_test
+TEST_PA_014	../genomes/TEST_PA_014.fna	LINEAGE_B	synthetic_test
+TEST_PA_015	../genomes/TEST_PA_015.fna	LINEAGE_C	synthetic_test
+TEST_PA_016	../genomes/TEST_PA_016.fna	LINEAGE_A	synthetic_test
+TEST_PA_017	../genomes/TEST_PA_017.fna	LINEAGE_B	synthetic_test
+TEST_PA_018	../genomes/TEST_PA_018.fna	LINEAGE_C	synthetic_test
+TEST_PA_019	../genomes/TEST_PA_019.fna	LINEAGE_A	synthetic_test
+TEST_PA_020	../genomes/TEST_PA_020.fna	LINEAGE_B	synthetic_test

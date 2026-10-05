@@ -1,0 +1,22 @@
+# SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
+feature_a	feature_b	feature_type	n_a	n_b	n_both	statistic	statistic_value	adjusted_p_value	interpretation_limit
+feature_a_00	feature_b_00	gene	1	1	1	fisher	0.1000	0.1000	association only; not an interaction
+feature_a_01	feature_b_01	gene	2	2	2	fisher	0.2000	0.2000	association only; not an interaction
+feature_a_02	feature_b_02	gene	3	3	3	fisher	0.3000	0.3000	association only; not an interaction
+feature_a_03	feature_b_03	gene	4	4	4	fisher	0.4000	0.4000	association only; not an interaction
+feature_a_04	feature_b_04	gene	5	5	5	fisher	0.5000	0.5000	association only; not an interaction
+feature_a_05	feature_b_05	gene	6	6	6	fisher	0.6000	0.6000	association only; not an interaction
+feature_a_06	feature_b_06	gene	7	7	7	fisher	0.7000	0.7000	association only; not an interaction
+feature_a_07	feature_b_07	gene	8	8	8	fisher	0.8000	0.8000	association only; not an interaction
+feature_a_08	feature_b_08	gene	9	9	9	fisher	0.9000	0.9000	association only; not an interaction
+feature_a_09	feature_b_09	gene	10	10	10	fisher	0.1000	0.1000	association only; not an interaction
+feature_a_10	feature_b_10	gene	11	11	11	fisher	0.2000	0.2000	association only; not an interaction
+feature_a_11	feature_b_11	gene	12	12	12	fisher	0.3000	0.3000	association only; not an interaction
+feature_a_12	feature_b_12	gene	13	13	13	fisher	0.4000	0.4000	association only; not an interaction
+feature_a_13	feature_b_13	gene	14	14	14	fisher	0.5000	0.5000	association only; not an interaction
+feature_a_14	feature_b_14	gene	15	15	15	fisher	0.6000	0.6000	association only; not an interaction
+feature_a_15	feature_b_15	gene	16	16	16	fisher	0.7000	0.7000	association only; not an interaction
+feature_a_16	feature_b_16	gene	17	17	17	fisher	0.8000	0.8000	association only; not an interaction
+feature_a_17	feature_b_17	gene	18	18	18	fisher	0.9000	0.9000	association only; not an interaction
+feature_a_18	feature_b_18	gene	19	19	19	fisher	0.1000	0.1000	association only; not an interaction
+feature_a_19	feature_b_19	gene	20	20	20	fisher	0.2000	0.2000	association only; not an interaction
