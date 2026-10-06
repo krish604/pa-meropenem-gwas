@@ -200,6 +200,8 @@ data/            REAL inputs (835 GCA_* assemblies, untouched by this build)
 test_data/       TEST fixtures: 20 synthetic TEST_PA_* samples
 workflow/        Snakefile — thin wrapper over the same stage functions
 scripts/         16 per-stage CLI wrappers + 4 shared entry points
+  hpc/               900-isolate HPC runner (phases, SLURM, consent gate)
+                     merged in from pa-aeruginosa-900; see scripts/hpc/README.md
 papipeline/      the library: all scientific logic
 results/         run outputs, per mode
 reports/         generated reports

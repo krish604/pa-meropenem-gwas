@@ -52,6 +52,23 @@ reports/*
 !reports/.gitkeep
 versions_*.txt
 
+# --- the HPC study directory (scripts/hpc/), from the merged runner repo ----
+# These came across with pa-aeruginosa-900, which had its own .gitignore.
+# Anchored to scripts/hpc/ so they cannot reach results/ above or any other
+# worktree's tree. The study's own results, roster, phenotype and assemblies
+# are inputs and outputs of ONE cohort: multi-gigabyte, regenerated, and never
+# part of the source. Only the directory itself is tracked.
+/scripts/hpc/results/*
+!/scripts/hpc/results/.gitkeep
+/scripts/hpc/assemblies/
+/scripts/hpc/annotations/
+/scripts/hpc/phenotype/
+/scripts/hpc/config/samples.txt
+/scripts/hpc/config/phenotype.tsv
+# Scheduler debris: submit_slurm.sh writes these beside the job script.
+scripts/hpc/**/slurm-*.out
+scripts/hpc/**/slurm-*.err
+
 # The live run-status log. The dashboard replays this file, so it is a large
 # per-run artefact, not source. Regenerated on every run.
 #
