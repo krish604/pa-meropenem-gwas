@@ -341,10 +341,19 @@ def test_real_bundle_stage_table(real_client):
     client, _state = real_client
     items = {item["name"]: item for item in client.get("/api/stages").json()["items"]}
     completed = [name for name, item in items.items() if item["state"] == "completed"]
+    # `cohort_variants` left this set when `an_calls` joined the contract.
+    # This bundle was written before the column existed, so the reader
+    # refuses it rather than present a table that cannot state its own
+    # denominator -- the refusal test_report_reads_run_tables.py asserts.
+    # See docs/data_contract.md, "Adding a data contract change". A re-run
+    # of the delivery bundle puts it back in this set.
     assert set(completed) == {
         "validation", "annotation", "mlst", "amr", "virulence",
-        "variants", "cohort_variants",
+        "variants",
     }
+    assert items["cohort_variants"]["state"] == "not_assessed"
+    assert "missing required columns" in items["cohort_variants"]["reason"]
+    assert "an_calls" in items["cohort_variants"]["reason"]
     assert items["pangenome"]["state"] == "failed"
     assert "ToolNotAvailableError" in items["pangenome"]["reason"]
     for name in (

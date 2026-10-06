@@ -67,6 +67,33 @@ PER_ISOLATE_COLUMNS = (
 #: INFO fields lifted from the VCF. `SGB` is excluded on purpose.
 _INFO_FIELDS = ("AC", "AN", "DP4", "MQ", "MQ0F")
 
+#: Per-isolate verdicts recorded in the provenance sidecar as `call_status`.
+#:
+#: The three-way split exists because scientific rule 9 ("missing data must
+#: remain missing") and the sidecar's own contract both require "called and
+#: found nothing" to be distinguishable from "we could not read this isolate".
+#: Before this vocabulary, a failed isolate and a clean one were byte-identical
+#: in the sidecar - both `n_snv: 0, n_indel: 0` - so a cohort of ten could ship
+#: with one genome silently unread and nothing on disk said so.
+#:
+#: `call_failed` and `call_failed_signal` are separated by fix 4 of
+#: `pa-artifacts/round12/FIX-MPILEUP.md`: a non-zero exit is a statement about
+#: the tool or the input, whereas a death by signal - `-9`, SIGKILL, observed
+#: on PDT000034122.1 - is a resource event. The two call for different
+#: responses, a rerun versus an exclusion, and are useless if merged.
+STATUS_CALLED = "called"
+STATUS_NO_ASSEMBLY = "no_assembly"
+STATUS_CALL_FAILED = "call_failed"
+STATUS_CALL_FAILED_SIGNAL = "call_failed_signal"
+
+#: The statuses that mean the isolate was NOT screened successfully. Used to
+#: group them in the end-of-stage warning, which names the isolates rather than
+#: reporting only a count.
+NOT_CALLED_STATUSES = frozenset({
+    STATUS_NO_ASSEMBLY, STATUS_CALL_FAILED, STATUS_CALL_FAILED_SIGNAL,
+})
+
+
 #: Sidecar written beside the stage's per-isolate calls. See
 #: :func:`write_provenance`.
 PROVENANCE_NAME = "variants_provenance.json"
@@ -240,6 +267,8 @@ def count_alleles(rows: Sequence[Mapping[str, str]]) -> Dict[str, int]:
 
 def call_provenance(
     calls_by_isolate: Mapping[str, Sequence[Mapping[str, str]]],
+    *,
+    statuses: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     """The per-isolate SNV/indel accounting for a whole stage run.
 
@@ -251,6 +280,12 @@ def call_provenance(
 
     Args:
         calls_by_isolate: ``sample_id -> rows``.
+        statuses: ``sample_id -> call_status`` (see the :data:`STATUS_*`
+            constants). When supplied, each entry carries a `call_status` key
+            and the totals carry `n_called`/`n_not_called`, which is what makes
+            "never screened" legible. When omitted the key is **absent** rather
+            than defaulted to `called`: rule 9 forbids reporting a verdict the
+            stage did not observe.
 
     Returns:
         ``{"per_isolate": [...], "totals": {...}}``. The totals are recomputed
@@ -260,13 +295,14 @@ def call_provenance(
     per_isolate: List[Dict[str, Any]] = []
     for sample_id in sorted(calls_by_isolate):
         counts = count_alleles(calls_by_isolate[sample_id])
-        per_isolate.append(
-            {
-                "sample_id": sample_id,
-                "n_calls": len(calls_by_isolate[sample_id]),
-                **counts,
-            }
-        )
+        entry: Dict[str, Any] = {
+            "sample_id": sample_id,
+            "n_calls": len(calls_by_isolate[sample_id]),
+            **counts,
+        }
+        if statuses is not None:
+            entry["call_status"] = statuses.get(sample_id, STATUS_CALLED)
+        per_isolate.append(entry)
 
     totals = {
         "isolates": len(per_isolate),
@@ -275,12 +311,22 @@ def call_provenance(
         "n_indel": sum(e["n_indel"] for e in per_isolate),
     }
     totals["n_alleles"] = totals["n_snv"] + totals["n_indel"]
+    if statuses is not None:
+        # Counted from the entries just built, not from `statuses`, so the
+        # totals and the per-isolate list cannot disagree about a sample that
+        # produced calls but was never given a verdict.
+        totals["n_called"] = sum(
+            1 for e in per_isolate if e.get("call_status") == STATUS_CALLED
+        )
+        totals["n_not_called"] = totals["isolates"] - totals["n_called"]
     return {"per_isolate": per_isolate, "totals": totals}
 
 
 def write_provenance(
     calls_by_isolate: Mapping[str, Sequence[Mapping[str, str]]],
     path: Path,
+    *,
+    statuses: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     """Write the accounting to ``path`` as JSON, and return it.
 
@@ -293,12 +339,14 @@ def write_provenance(
     Args:
         calls_by_isolate: ``sample_id -> rows``.
         path: Where to write. Parent directories are created.
+        statuses: Per-isolate `call_status`, recorded alongside the counts. See
+            :func:`call_provenance`.
 
     Returns:
         The same payload :func:`call_provenance` built, so a caller that only
         wants the numbers never has to read the file back.
     """
-    payload = call_provenance(calls_by_isolate)
+    payload = call_provenance(calls_by_isolate, statuses=statuses)
     path = Path(path)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,6 +367,7 @@ def summarise_call_provenance(
     *,
     mode: RunMode,
     path: Optional[Path] = None,
+    statuses: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     """Record the SNV/indel accounting, and warn when there are no indels at all.
 
@@ -340,14 +389,16 @@ def summarise_call_provenance(
             committed fixtures whose contents are a property of the fixture,
             not of this pipeline.
         path: Optional sidecar destination. See :func:`write_provenance`.
+        statuses: Per-isolate `call_status`. Supplies the sidecar field and
+            drives the warning that names the isolates that were not screened.
 
     Returns:
         The payload, so a caller can assert on the numbers without re-reading.
     """
     payload = (
-        write_provenance(calls_by_isolate, path)
+        write_provenance(calls_by_isolate, path, statuses=statuses)
         if path is not None
-        else call_provenance(calls_by_isolate)
+        else call_provenance(calls_by_isolate, statuses=statuses)
     )
     totals = payload["totals"]
 
@@ -356,6 +407,8 @@ def summarise_call_provenance(
         totals["n_alleles"], totals["isolates"],
         totals["n_snv"], totals["n_indel"],
     )
+
+    _log_not_called(payload, statuses)
 
     if mode is RunMode.REAL and totals["n_indel"] == 0:
         LOGGER.warning(
@@ -370,6 +423,69 @@ def summarise_call_provenance(
             totals["isolates"], totals["n_snv"], NO_INDEL_WARNING,
         )
     return payload
+
+
+def _log_not_called(
+    payload: Mapping[str, Any],
+    statuses: Optional[Mapping[str, str]],
+) -> None:
+    """Name the isolates that were not screened, grouped by why.
+
+    A count cannot be acted on: nobody can rerun an isolate they cannot name,
+    and "1 of 10 produced no calls" does not say whether the assembly was
+    missing or the tool was killed. The denominator is stated alongside them,
+    because that is the number a reader of the merge table otherwise has to
+    reconstruct from `an` and `an_calls`.
+    """
+    if statuses is None:
+        return
+
+    by_status: Dict[str, List[str]] = {}
+    for entry in payload["per_isolate"]:
+        status = entry.get("call_status")
+        if status in NOT_CALLED_STATUSES:
+            by_status.setdefault(status, []).append(entry["sample_id"])
+
+    if not by_status:
+        return
+
+    totals = payload["totals"]
+    named = "; ".join(
+        f"{status}: {', '.join(names)}"
+        for status, names in sorted(by_status.items())
+    )
+    LOGGER.warning(
+        "Stage 6: %d of %d isolates produced no calls (%d called), so the "
+        "merge's denominator counts all %d while only %d could be read. "
+        "an=%d (%d with calls; %s). They remain cohort members - see "
+        "an_calls in the merge table.",
+        totals["n_not_called"], totals["isolates"], totals["n_called"],
+        totals["isolates"], totals["n_called"],
+        totals["isolates"], totals["n_called"], named,
+    )
+
+
+def _failure_status(exc: BaseException) -> str:
+    """Classify a call failure: a tool that *exited* versus one that was *killed*.
+
+    `ToolExecutionError` carries the tool's return code in its context
+    (`minimap2.py` passes `returncode=completed.returncode`). A negative value
+    is Python's representation of death by signal, and `-9` is SIGKILL - the
+    form the OOM killer takes, observed on PDT000034122.1 in round 12.
+
+    That distinction is not cosmetic. A non-zero exit points at the input or
+    the command line and is worth investigating once; a SIGKILL points at
+    memory on the node and is worth a rerun on a quieter one. Collapsing them
+    turns an infrastructure event into a verdict about the genome.
+    """
+    context = getattr(exc, "context", None)
+    if not isinstance(context, Mapping):
+        return STATUS_CALL_FAILED
+    returncode = context.get("returncode")
+    if isinstance(returncode, int) and not isinstance(returncode, bool) \
+            and returncode < 0:
+        return STATUS_CALL_FAILED_SIGNAL
+    return STATUS_CALL_FAILED
 
 
 def call_settings(config: PipelineConfig) -> Dict[str, Any]:
@@ -413,6 +529,7 @@ def run(
     *,
     data_root: Path,
     workdir: Path,
+    statuses: Optional[Dict[str, str]] = None,
 ) -> Dict[str, List[Dict[str, str]]]:
     """Stage 6 entry point: per-isolate calls against the reference.
 
@@ -423,6 +540,12 @@ def run(
         data_root: Mode's data root. ``TEST`` finds its VCFs under
             ``<data_root>/variants/``.
         workdir: Scratch directory for intermediate alignments.
+        statuses: Optional out-parameter. When supplied it is filled with
+            ``sample_id -> call_status`` (see the :data:`STATUS_*` constants),
+            so the stage 6a merge can distinguish an isolate that produced no
+            variant from one it could not read. It is an out-parameter rather
+            than a change to the return type because the returned mapping is
+            the stage's contract and several callers depend on its shape.
 
     Returns:
         ``sample_id -> rows``, with a key for **every** manifest sample. An
@@ -435,15 +558,24 @@ def run(
         denominator ``an`` from ``len(calls_by_isolate)``, so dropping the
         isolates that produced no calls would inflate every allele frequency the
         cohort reports.
+
+        The empty entries alone cannot make that distinction, though: a clean
+        genome and a failed one are both ``[]``. ``statuses`` carries the
+        difference, which is why stage 6a needs it as well.
     """
     if mode is RunMode.TEST:
-        return _run_from_fixtures(manifest, data_root)
+        return _run_from_fixtures(manifest, data_root, statuses=statuses)
 
-    return _run_by_aligning(config, manifest, data_root, workdir)
+    return _run_by_aligning(
+        config, manifest, data_root, workdir, statuses_out=statuses
+    )
 
 
 def _run_from_fixtures(
-    manifest: SampleManifest, data_root: Path
+    manifest: SampleManifest,
+    data_root: Path,
+    *,
+    statuses: Optional[Dict[str, str]] = None,
 ) -> Dict[str, List[Dict[str, str]]]:
     """TEST: parse the committed per-isolate VCFs.
 
@@ -463,6 +595,7 @@ def _run_from_fixtures(
         )
 
     calls: Dict[str, List[Dict[str, str]]] = {}
+    fixture_statuses: Dict[str, str] = {}
     for sample_id in manifest.sample_ids:
         if (calls_dir / f"{sample_id}.vcf").is_file():
             calls[sample_id] = load_precomputed(calls_dir, sample_id)
@@ -470,6 +603,12 @@ def _run_from_fixtures(
             # Present, empty: the isolate is a cohort member that carries no
             # called variant. `an` must still count it.
             calls[sample_id] = []
+        # Both branches are `called`. TEST has no failure mode here: it either
+        # parsed the committed VCF or recorded the fixture's empty one, and
+        # neither is an attempt that did not complete. A fixture that is absent
+        # from `variants/` entirely raises at `calls_dir` above rather than
+        # being recorded as a failure, so nothing reaches this loop unobserved.
+        fixture_statuses[sample_id] = STATUS_CALLED
 
     called = sum(1 for rows in calls.values() if rows)
     LOGGER.info(
@@ -479,7 +618,10 @@ def _run_from_fixtures(
     # counts of a committed fixture are a property of the fixture. The summary
     # is still logged, with the zero-indel warning suppressed - see
     # `summarise_call_provenance`.
-    summarise_call_provenance(calls, mode=RunMode.TEST)
+    summarise_call_provenance(calls, mode=RunMode.TEST, statuses=fixture_statuses)
+    if statuses is not None:
+        statuses.clear()
+        statuses.update(fixture_statuses)
     return calls
 
 
@@ -488,6 +630,8 @@ def _run_by_aligning(
     manifest: SampleManifest,
     data_root: Path,
     workdir: Path,
+    *,
+    statuses_out: Optional[Dict[str, str]] = None,
 ) -> Dict[str, List[Dict[str, str]]]:
     """REAL: align each isolate to the reference and call its variants.
 
@@ -519,7 +663,7 @@ def _run_by_aligning(
     workdir = Path(workdir)
 
     calls: Dict[str, List[Dict[str, str]]] = {}
-    unusable: List[str] = []
+    statuses: Dict[str, str] = {}
 
     for sample_id in manifest.sample_ids:
         try:
@@ -530,7 +674,7 @@ def _run_by_aligning(
                 "no calls (%s)", sample_id, exc,
             )
             calls[sample_id] = []
-            unusable.append(sample_id)
+            statuses[sample_id] = STATUS_NO_ASSEMBLY
             continue
 
         try:
@@ -549,7 +693,7 @@ def _run_by_aligning(
                 "with no calls (%s)", sample_id, exc,
             )
             calls[sample_id] = []
-            unusable.append(sample_id)
+            statuses[sample_id] = _failure_status(exc)
             continue
 
         # The same parser TEST uses, so the two modes cannot disagree about how
@@ -557,16 +701,18 @@ def _run_by_aligning(
         calls[sample_id] = parse_vcf(
             Path(result.vcf).read_text(encoding="utf-8"), sample_id=sample_id
         )
+        statuses[sample_id] = STATUS_CALLED
 
-    if unusable:
-        LOGGER.warning(
-            "Stage 6: %d of %d isolates produced no calls (%s). They remain "
-            "cohort members, so the merge's denominator still counts them.",
-            len(unusable), len(calls), ",".join(unusable[:10]),
-        )
+    # The end-of-stage warning that names the unread isolates lives in
+    # `summarise_call_provenance`, so the log and the sidecar cannot disagree
+    # about who was screened.
     summarise_call_provenance(
-        calls, mode=RunMode.REAL, path=workdir / PROVENANCE_NAME
+        calls, mode=RunMode.REAL, path=workdir / PROVENANCE_NAME,
+        statuses=statuses,
     )
+    if statuses_out is not None:
+        statuses_out.clear()
+        statuses_out.update(statuses)
     return calls
 
 

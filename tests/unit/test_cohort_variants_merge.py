@@ -242,6 +242,21 @@ class TestRefusals:
 
 class TestContract:
     def test_columns_are_long_and_tidy(self):
-        """One row per site, not one column per isolate."""
-        assert MERGE_COLUMNS == ("chrom", "pos", "ref", "alt", "ac", "an", "af")
+        """One row per site, not one column per isolate.
+
+        `an_calls` was added by fix 3 of `pa-artifacts/round12/FIX-MPILEUP.md`
+        so the table states its own denominator. It sits beside `an`, which is
+        unchanged: `an` stays the cohort size and `af` stays ``ac / an``. That
+        split is deliberate and is what the assertions below pin - reporting the
+        shortfall without silently redefining the frequency that has been
+        published all along.
+        """
+        assert MERGE_COLUMNS == (
+            "chrom", "pos", "ref", "alt", "ac", "an", "an_calls", "af",
+        )
+        # Still long/tidy: no per-isolate column may creep in.
         assert "iso1" not in MERGE_COLUMNS
+        # `an` precedes `an_calls`, which precedes `af`, so a reader meets the
+        # cohort size before the subset that could be read.
+        assert MERGE_COLUMNS.index("an") < MERGE_COLUMNS.index("an_calls")
+        assert MERGE_COLUMNS.index("an_calls") < MERGE_COLUMNS.index("af")

@@ -1,22 +1,22 @@
 # SYNTHETIC TEST DATA - NOT BIOLOGICAL RESULTS
-chrom	pos	ref	alt	ac	an	af
-NC_002516.2	1	A	G	ac_00	an_00	af_00
-NC_002516.2	2	A	G	ac_01	an_01	af_01
-NC_002516.2	3	A	G	ac_02	an_02	af_02
-NC_002516.2	4	A	G	ac_03	an_03	af_03
-NC_002516.2	5	A	G	ac_04	an_04	af_04
-NC_002516.2	6	A	G	ac_05	an_05	af_05
-NC_002516.2	7	A	G	ac_06	an_06	af_06
-NC_002516.2	8	A	G	ac_07	an_07	af_07
-NC_002516.2	9	A	G	ac_08	an_08	af_08
-NC_002516.2	10	A	G	ac_09	an_09	af_09
-NC_002516.2	11	A	G	ac_10	an_10	af_10
-NC_002516.2	12	A	G	ac_11	an_11	af_11
-NC_002516.2	13	A	G	ac_12	an_12	af_12
-NC_002516.2	14	A	G	ac_13	an_13	af_13
-NC_002516.2	15	A	G	ac_14	an_14	af_14
-NC_002516.2	16	A	G	ac_15	an_15	af_15
-NC_002516.2	17	A	G	ac_16	an_16	af_16
-NC_002516.2	18	A	G	ac_17	an_17	af_17
-NC_002516.2	19	A	G	ac_18	an_18	af_18
-NC_002516.2	20	A	G	ac_19	an_19	af_19
+chrom	pos	ref	alt	ac	an	an_calls	af
+NC_002516.2	1	A	G	ac_00	an_00	an_calls_00	af_00
+NC_002516.2	2	A	G	ac_01	an_01	an_calls_01	af_01
+NC_002516.2	3	A	G	ac_02	an_02	an_calls_02	af_02
+NC_002516.2	4	A	G	ac_03	an_03	an_calls_03	af_03
+NC_002516.2	5	A	G	ac_04	an_04	an_calls_04	af_04
+NC_002516.2	6	A	G	ac_05	an_05	an_calls_05	af_05
+NC_002516.2	7	A	G	ac_06	an_06	an_calls_06	af_06
+NC_002516.2	8	A	G	ac_07	an_07	an_calls_07	af_07
+NC_002516.2	9	A	G	ac_08	an_08	an_calls_08	af_08
+NC_002516.2	10	A	G	ac_09	an_09	an_calls_09	af_09
+NC_002516.2	11	A	G	ac_10	an_10	an_calls_10	af_10
+NC_002516.2	12	A	G	ac_11	an_11	an_calls_11	af_11
+NC_002516.2	13	A	G	ac_12	an_12	an_calls_12	af_12
+NC_002516.2	14	A	G	ac_13	an_13	an_calls_13	af_13
+NC_002516.2	15	A	G	ac_14	an_14	an_calls_14	af_14
+NC_002516.2	16	A	G	ac_15	an_15	an_calls_15	af_15
+NC_002516.2	17	A	G	ac_16	an_16	an_calls_16	af_16
+NC_002516.2	18	A	G	ac_17	an_17	an_calls_17	af_17
+NC_002516.2	19	A	G	ac_18	an_18	an_calls_18	af_18
+NC_002516.2	20	A	G	ac_19	an_19	an_calls_19	af_19

@@ -30,11 +30,27 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from ..errors import DataContractError
 from ..logging_utils import get_logger
+from .variants import STATUS_CALLED
 
 LOGGER = get_logger("stages.cohort_variants")
 
 #: The merge output contract. Long/tidy; see the module docstring.
-MERGE_COLUMNS: Tuple[str, ...] = ("chrom", "pos", "ref", "alt", "ac", "an", "af")
+#: The merge table's columns, in file order.
+#:
+#: `an` is the cohort size - every isolate the study contains, whether or not it
+#: could be read - and is unchanged by `an_calls`. `an_calls` is how many of
+#: them produced a call set at all. Both are printed because they answer
+#: different questions and only together do they distinguish "this cohort
+#: carries no variant here" from "we could not read this isolate".
+#:
+#: `af` is still ``ac / an``: an isolate that could not be read counts in the
+#: denominator as a non-carrier, which is the documented behaviour
+#: (:func:`run` argues it at length). Publishing `an_calls` closes the
+#: invisibility gap without changing a single frequency the pipeline has
+#: already reported. See `pa-artifacts/round12/FIX-MPILEUP.md` fix 3.
+MERGE_COLUMNS: Tuple[str, ...] = (
+    "chrom", "pos", "ref", "alt", "ac", "an", "an_calls", "af",
+)
 
 #: `(chrom, pos, ref, alt)` for one isolate's call.
 Call = Tuple[str, str, str, str]
@@ -46,6 +62,7 @@ def merge_calls(
     max_maf: Optional[float] = None,
     require_max_maf: bool = False,
     min_dissenters: Optional[int] = 2,
+    statuses: Optional[Mapping[str, str]] = None,
 ) -> List[Dict[str, str]]:
     """Merge per-isolate calls into cohort-polymorphic sites.
 
@@ -62,6 +79,13 @@ def merge_calls(
             floor, since a lone dissenter is as suspect as a lone carrier. Pass
             None to disable the ceiling.
         require_max_maf: Refuse when neither bound was supplied.
+        statuses: Stage 6's ``sample_id -> call_status``. Supplies ``an_calls``,
+            the count of isolates that actually produced a call set. An
+            isolate's row list is empty both when it was screened and carried
+            nothing and when it could not be read at all, so this mapping is
+            the only thing that can tell them apart. When omitted, ``an_calls``
+            equals ``an``: nothing was observed to have failed, and inventing a
+            shortfall would be as wrong as hiding one.
 
     Returns:
         One row per retained site, sorted by position then allele.
@@ -77,6 +101,16 @@ def merge_calls(
             n_isolates=0,
         )
     cohort_size = len(calls_by_isolate)
+    # `an` is the cohort; `an_calls` is the part of it that could be read. They
+    # differ exactly when stage 6 recorded a failure for an isolate, and are
+    # equal otherwise - including when nobody tracked status at all.
+    an_calls = (
+        cohort_size if statuses is None else
+        sum(
+            1 for sample_id in calls_by_isolate
+            if statuses.get(sample_id, STATUS_CALLED) == STATUS_CALLED
+        )
+    )
     ceiling_af = max_maf
     if min_dissenters is not None:
         # `af > 1 - d/an` is exactly `an - ac < d`, so the symmetric rule and an
@@ -145,6 +179,7 @@ def merge_calls(
                 "alt": alt,
                 "ac": str(ac),
                 "an": str(an),
+                "an_calls": str(an_calls),
                 "af": f"{af:.6g}",
             }
         )
@@ -156,6 +191,8 @@ def run(
     config: Any,
     manifest: Any,
     calls_by_isolate: Mapping[str, Sequence[Mapping[str, str]]],
+    *,
+    statuses: Optional[Mapping[str, str]] = None,
 ) -> List[Dict[str, str]]:
     """Stage 6a entry point: merge the per-isolate calls cohort-wide.
 
@@ -168,6 +205,9 @@ def run(
             see below.
         calls_by_isolate: Per-isolate rows from the stage above, keyed by
             isolate.
+        statuses: Stage 6's ``sample_id -> call_status``, carried in memory
+            rather than re-read from the provenance sidecar so the merge cannot
+            disagree with the run that produced its input.
 
     Returns:
         One row per retained site, in :data:`MERGE_COLUMNS` order.
@@ -212,8 +252,33 @@ def run(
     # assembly artefacts rather than of a biological difference. The symmetric
     # bound below is the operative filter. See
     # docs/design/cohort-variant-merge.md 5c.
-    rows = merge_calls(cohort)
+    rows = merge_calls(cohort, statuses=statuses)
+
+    # The denominator is stated in the log so a reader of the table can see it
+    # without recomputing, and the isolates that produced no calls are NAMED:
+    # a count cannot be acted on. This is fix 2 of
+    # `pa-artifacts/round12/FIX-MPILEUP.md`, and it exists because the 10-isolate
+    # round-12 run shipped `variants.tsv` covering 9 of 10 genomes while saying
+    # nothing on its own face about the tenth.
+    an = len(cohort)
+    an_calls = (
+        an if statuses is None else
+        sum(
+            1 for sample_id in cohort
+            if statuses.get(sample_id, STATUS_CALLED) == STATUS_CALLED
+        )
+    )
+    if an_calls < an:
+        unread = sorted(
+            sample_id for sample_id in cohort
+            if statuses.get(sample_id, STATUS_CALLED) != STATUS_CALLED
+        )
+        LOGGER.warning(
+            "Stage 6a: an=%d (%d with calls; %s produced none)",
+            an, an_calls, ", ".join(unread[:10]),
+        )
     LOGGER.info(
-        "Stage 6a: %d polymorphic sites across %d isolates", len(rows), len(cohort)
+        "Stage 6a: %d polymorphic sites across %d isolates (an=%d, an_calls=%d)",
+        len(rows), len(cohort), an, an_calls,
     )
     return rows

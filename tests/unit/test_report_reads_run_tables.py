@@ -116,6 +116,27 @@ class TestEveryPathComesFromADeclaration:
         assert "missing required columns" in tables["amr"].reason
         assert required_columns("amr")
 
+    def test_cohort_variants_without_an_calls_is_refused(
+        self, config: PipelineConfig, stage_dir: Path
+    ):
+        """`an_calls` is part of the contract now, so its absence is a defect.
+
+        Added by fix 3 of `pa-artifacts/round12/FIX-MPILEUP.md`. A table written
+        before it existed must not be read as though it were one that reports its
+        denominator: without the column, "all ten isolates were read" and "nine
+        were and the tenth never was" are byte-identical, which is exactly the
+        indistinguishability the column was added to remove.
+        """
+        write_table(
+            table_path(stage_dir, "cohort_variants"),
+            [{"chrom": "NC_002516.2", "pos": "1", "ref": "A", "alt": "G",
+              "ac": "1", "an": "2", "af": "0.5"}],
+        )
+        tables = load_run_tables(config, RunMode.REAL, stage_dir=stage_dir)
+        assert not tables["cohort_variants"].present
+        assert "missing required columns" in tables["cohort_variants"].reason
+        assert "an_calls" in required_columns("cohort_variants")
+
 
 # --------------------------------------------------------------------------
 # R2 - a missing table is named, with its reason, in every mode

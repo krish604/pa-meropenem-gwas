@@ -997,6 +997,12 @@ def run_pipeline(
     #: `cohort_variants` (6a) so the merge consumes this run's calls rather than
     #: re-reading a file that could disagree with them.
     variant_calls: Dict[str, List[Any]] = {}
+    #: Stage 6's per-isolate verdict, same handoff for the same reason. The
+    #: calls alone cannot express it: an isolate that produced no variant and
+    #: one that could not be read are both an empty list. Passed in memory so
+    #: `an_calls` in the merge reflects THIS run, not a sidecar that could be
+    #: stale.
+    variant_statuses: Dict[str, str] = {}
     structural: Dict[str, List[Any]] = {}
     mechanism_calls: Dict[str, List[Any]] = {}
     virulence: Dict[str, List[Any]] = {}
@@ -1045,7 +1051,7 @@ def run_pipeline(
             so that :func:`papipeline.execution.run_task` can invoke it and
             the stage's state, validation and events are recorded around it.
             """
-            nonlocal qc, qc_summary, annotations, annotated_gene_names, mlst_calls, amr_calls, regulator_variants, oprd_locus_resolution, oprd_structural_calls, variant_calls, structural, mechanism_calls, virulence, lineages, tree_summary, alignment_info, phenotype_calls, phenotype_by_sample, gwas_results, gwas_input, convergence_calls, cooccurrence, master
+            nonlocal qc, qc_summary, annotations, annotated_gene_names, mlst_calls, amr_calls, regulator_variants, oprd_locus_resolution, oprd_structural_calls, variant_calls, variant_statuses, structural, mechanism_calls, virulence, lineages, tree_summary, alignment_info, phenotype_calls, phenotype_by_sample, gwas_results, gwas_input, convergence_calls, cooccurrence, master
 
             if resolved is RunMode.STUB:
                 # STUB runs no parser, no classifier and no tool. It writes the
@@ -1223,6 +1229,7 @@ def run_pipeline(
                     config, manifest, resolved,
                     data_root=data_root,
                     workdir=intermediate / VARIANTS_WORK_DIRNAME,
+                    statuses=variant_statuses,
                 )
                 record(
                     "variants",
@@ -1347,7 +1354,8 @@ def run_pipeline(
                 # here, because two implementations of it would be free to
                 # disagree and nothing would catch it.
                 cohort_rows = stage_cohort_variants.run(
-                    config, manifest, variant_calls
+                    config, manifest, variant_calls,
+                    statuses=variant_statuses,
                 )
                 record(
                     "cohort_variants",

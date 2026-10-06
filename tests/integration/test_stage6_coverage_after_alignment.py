@@ -344,16 +344,19 @@ def aligned_caller(monkeypatch, synthetic_real_run):
     })
     assert set(row) == set(columns), (row, columns)
 
-    def run(config, manifest, mode, *, data_root, workdir):
+    def run(config, manifest, mode, *, data_root, workdir, statuses):
         assert isinstance(workdir, Path), (
             f"the caller was handed {type(workdir).__name__}, not the Path "
             "derive_locus_coverage's `variants_workdir` names"
         )
-        workdir = Path(workdir)
+        # Out-param, filled by the real stage so stage 6a can tell "carried
+        # nothing" from "never read". Both isolates here are genuinely called.
+        assert isinstance(statuses, dict)
         for sample_id in manifest.sample_ids:
             write_bam(
                 workdir / sample_id / f"{sample_id}{SORTED_BAM_SUFFIX}"
             )
+            statuses[sample_id] = stage_variants.STATUS_CALLED
         # run.py rewrites `variants.tsv` from this RETURN value, so returning
         # rows is what makes the table non-empty; writing the file here would be
         # overwritten with a header one line later.

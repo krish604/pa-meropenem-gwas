@@ -849,14 +849,20 @@ def injected_variants(monkeypatch, synthetic_real_run):
     })
     assert set(row) == set(columns), (row, columns)
 
-    def run(config, manifest, mode, *, data_root, workdir):
-        # `data_root`/`workdir` are the keywords run.py actually passes (see
-        # run.py:1227); naming them keeps the double's signature honest about
-        # what the call site supplies, so a change there fails here too.
+    def run(config, manifest, mode, *, data_root, workdir, statuses):
+        # `data_root`/`workdir`/`statuses` are the keywords run.py actually
+        # passes (see run.py:1222); naming them keeps the double's signature
+        # honest about what the call site supplies, so a change there fails here
+        # too. `statuses` is an out-param: the real stage fills it and stage 6a
+        # reads it back, so the double fills it as well rather than leaving the
+        # second half of that handshake untested.
         assert isinstance(data_root, Path) and isinstance(workdir, Path)
+        assert isinstance(statuses, dict)
         # The RETURN value is what matters: run.py:1234 rewrites `variants.tsv`
         # from it via `write_tsv`, so a double that only wrote the file would be
         # overwritten with a header-only table one line later.
+        for sample_id in ISOLATES:
+            statuses[sample_id] = stage_variants.STATUS_CALLED
         return {ISOLATES[0]: [row], ISOLATES[1]: []}
 
     monkeypatch.setattr(stage_variants, "run", run)

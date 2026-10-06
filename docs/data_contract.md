@@ -223,6 +223,43 @@ refuses a value the database does not screen for. (`--list_organisms` **requires
 `sample_id`, `virulence_factor`, `gene`, `category`, `database`,
 `database_version`, `confidence`, `identity_pct`
 
+**`variants/variants.tsv`** (stage 6)
+`sample_id`, `chrom`, `pos`, `ref`, `alt`, `qual`, `filter`, `GT`, `AC`, `AN`,
+`DP4`, `MQ`, `MQ0F` — one row per variant call, joined across all isolates.
+
+**`variants/variants_provenance.json`** (stage 6, alongside the table)
+`per_isolate[]` carries `sample_id`, `call_status`, `n_snv`, `n_indel`,
+`n_alleles`; `totals` carries `isolates`, `n_calls`, `n_snv`, `n_indel`,
+`n_alleles`, and — only when status was tracked — `n_called`, `n_not_called`.
+
+- `call_status` is one of `called`, `no_assembly`, `call_failed`,
+  `call_failed_signal`. The last is distinct from `call_failed` because a
+  negative return code is a signal, not an exit status: a tool that was killed
+  (the round-12 `mpileup` SIGKILL) is a different failure from one that exited
+  non-zero, and it points at a different response.
+- **The key is omitted entirely when status was not tracked**, rather than
+  emitted as `"unknown"`. This is `docs/scientific_rules.md` rule 9: missing
+  data must remain missing, and a placeholder that reads like a verdict is the
+  one thing a reader cannot distinguish from the truth.
+- It is a *per-isolate* verdict and is deliberately **not** a column of
+  `variants.tsv`. `tests/unit/test_variants_contract.py` rejects it there, and
+  correctly: the table is one row per variant, and an isolate's failure to be
+  read at all is not a property of any site.
+
+**`cohort_variants/cohort_variants.tsv`** (stage 6a)
+`chrom`, `pos`, `ref`, `alt`, `ac`, `an`, `an_calls`, `af` — one row per
+cohort-polymorphic site.
+
+- `an` is the cohort size: every isolate the study contains, read or not. It is
+  unchanged from before `an_calls` existed and **stays the denominator of `af`**.
+- `an_calls` is how many of those isolates produced a call set at all. It exists
+  because `an` alone reported round 12's 10-isolate cohort as complete while one
+  genome was never read, with nothing on the face of the table to say so.
+- `af` remains exactly ``ac / an``. An unread isolate counts in the denominator
+  as a non-carrier: it was never observed to carry the site, and excluding it
+  would renumber every frequency already published. Reporting the shortfall and
+  preserving the frequency are independent, and this table does both.
+
 **`gwas/gwas_features.tsv`**
 `sample_id` (unique) plus one column per feature, named `<type>__<label>`.
 Values must be binary. The `<type>` prefix must appear in

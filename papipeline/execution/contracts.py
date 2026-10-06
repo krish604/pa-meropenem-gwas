@@ -99,7 +99,7 @@ STAGE_TABLES: Dict[str, Tuple[str, Tuple[str, ...]]] = {
     # header row, so the pivot is a separate concern with no consumer yet. The
     # columns now match the implemented contract in stages/cohort_variants.py.
     "cohort_variants": ("cohort_variants.tsv", (
-        "chrom", "pos", "ref", "alt", "ac", "an", "af",
+        "chrom", "pos", "ref", "alt", "ac", "an", "an_calls", "af",
     )),
     "recombination": ("recombination.tsv", (
         "node",         "n_snps",         "mean_branch_length",         "recombination_detected", 
