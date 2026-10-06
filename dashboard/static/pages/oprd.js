@@ -35,7 +35,7 @@
  * `disrupted` come only from a confirmed lesion.
  */
 
-import { ABSENT, absentSpan, clear, h, kv, message, note, probeList, serverMessage } from '../app.js';
+import { ABSENT, absentSpan, clear, dataTable, h, kv, message, note, probeList, serverMessage } from '../app.js';
 import { absence, cell, createPagedGrid, isAbsenceWord, mountPowerBanner } from './tables.js';
 
 /**
@@ -160,8 +160,41 @@ export function mount(container, ctx) {
   const vocabHost = h('div', { class: 'panel' });
   const bannerHost = h('div');
   const evidenceHost = h('div');
+  const locusHost = h('div', { class: 'panel' });
   const gridHost = h('div');
-  container.append(alertHost, statusHost, vocabHost, bannerHost, evidenceHost, gridHost);
+  container.append(alertHost, statusHost, vocabHost, bannerHost, evidenceHost, locusHost, gridHost);
+
+  /**
+   * The locus-coverage gate, which is a DIFFERENT instrument from the tblastn
+   * structural verdict above. The coverage gate asks "did an alignment span the
+   * locus"; the structural call asks "is the ORF intact in the assembly". The
+   * run reports both, and this panel keeps them apart: a
+   * `refused:insufficient_coverage` row here does not contradict a structural
+   * verdict, and neither is merged into the other.
+   */
+  function renderLocusCoverage(body) {
+    clear(locusHost);
+    const gate = body.locus_coverage || {};
+    locusHost.appendChild(h('h3', null, 'The oprD locus-coverage gate (a second instrument)'));
+    locusHost.appendChild(
+      note(
+        'Separate from the structural verdict above. This gate reports whether an alignment ' +
+          'spanned the locus; the structural call reports whether the ORF is intact. The run ' +
+          'reports both, and this page never merges them.'
+      )
+    );
+    if (!gate.available) {
+      locusHost.appendChild(absentSpan(gate.reason || 'no locus-coverage gate lines were found', ABSENT.NOT_PRODUCED));
+      return;
+    }
+    if (gate.note) locusHost.appendChild(note(gate.note, 'panel-note'));
+    const rows = (gate.items || []).map((item) => ({
+      sample_id: item.sample_id,
+      verdict: item.verdict,
+      coverage_pct: typeof item.coverage_pct === 'number' ? item.coverage_pct.toFixed(1) : item.coverage_pct,
+    }));
+    locusHost.appendChild(dataTable(['sample_id', 'verdict', 'coverage_pct'], rows, 'the gate holds no rows'));
+  }
 
   function renderVocabulary(body) {
     clear(vocabHost);
@@ -356,6 +389,7 @@ export function mount(container, ctx) {
     if (disposed) return;
     clear(alertHost);
     renderVocabulary(body);
+    renderLocusCoverage(body);
     if (!body.available) {
       renderNotProduced(body);
       // No banner: no statistic is displayed. The verdict count is zero

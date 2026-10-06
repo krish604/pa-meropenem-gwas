@@ -1358,6 +1358,11 @@ components:
                   Only `resolved` asserts the locus is present. No refusal means
                   the locus is absent - each means it was not assessed, and
                   `absent` is reserved for a confirmed structural verdict.
+                  A delivery run's tblastn table carries `structural_verdict`
+                  (`intact`/`disrupted`) instead of `verdict`; the endpoint maps
+                  those to `resolved` with the display state taken from
+                  `structural_verdict` itself, and never coerces one vocabulary
+                  into the other.
               lesion_type: { type: [string, "null"] }
               position: { type: [integer, "null"] }
               truncation_aa: { type: [integer, "null"] }
@@ -1366,6 +1371,27 @@ components:
               display_state:
                 type: string
                 enum: [intact, disrupted, absent, not_assessed]
+        locus_coverage:
+          type: object
+          description: |
+            The SEPARATE oprD locus-coverage gate, parsed from the delivery
+            run's `artifacts/logs/full_run.log`. It is a different instrument
+            from the tblastn structural call: the coverage gate asks whether an
+            alignment spanned the locus, the structural call asks whether the
+            ORF is intact. The two are reported side by side and never merged.
+          properties:
+            available: { type: boolean }
+            reason: { type: [string, "null"] }
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  sample_id: { type: string }
+                  verdict: { type: string }
+                  coverage_pct: { type: number }
+                  display_state: { type: string, enum: [intact, disrupted, absent, not_assessed] }
+            note: { type: string }
         meta: { $ref: "#/components/schemas/PageMeta" }
 
     Pangenome:

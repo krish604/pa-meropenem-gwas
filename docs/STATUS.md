@@ -86,13 +86,42 @@ A REAL run must show zero tool executions. Three independent guards, all require
    coverage (an absolute-path invocation that bypasses the shim); it does not
    decide the question.
 
+## Dashboard (read-only results UI)
+
+A read-only monitoring dashboard lives in [`dashboard/`](../dashboard/). It reads
+a results root or a delivery bundle, writes only its own state directory
+(`~/.pa_dashboard/`), makes no network calls, and binds `127.0.0.1` by default.
+Start it with:
+
+```bash
+scripts/run_dashboard.sh --results <results-dir> --port 8765
+```
+
+- **Acceptance: 13 of 13** items (UI-1 … UI-13). The stage view shows true
+  per-stage states and named reasons; the launcher is disabled unless the server
+  is started with `--allow-launch`, defaults to a dry run, and requires the exact
+  typed phrase `run real samples` for a REAL run.
+- **Real data limited to stages 1–6a.** Against the real 10-isolate bundle the
+  dashboard shows stages 1–6/6a `completed`, stage 7 `failed`
+  (`ToolNotAvailableError`), and stages 8–16 `not_run`. Tree, imipenem SIR and
+  lineage read **`not produced`** with the reason, never a zero or a blank.
+- **Never browser-painted.** The pages were exercised through the HTTP API and a
+  `node --test` route-mount suite; no browser or screenshot pass was run, so CSS
+  layout and paint are asserted only structurally, not visually.
+
 ## Test suite
 
 | Invocation | Result |
 |---|---|
 | `pytest -q` | 3343 passed, 65 skipped, 0 failed |
 | `pytest tests dashboard/tests -q` | 3434 passed, 68 skipped, 0 failed |
-| `pytest dashboard/tests -q` | 91 passed, 3 skipped, 0 failed |
+| `pytest dashboard/tests -q` | 112 passed, 3 skipped, 0 failed |
+| `PA_FIXTURES_LARGE=1 pytest dashboard/tests -q` | 114 passed, 1 skipped, 0 failed |
+| `node --test dashboard/tests/js/` | 32 passed, 0 failed |
+
+The 3 dashboard skips in default mode are the UI-D5/perf gates, which need the
+900-isolate set (`PA_FIXTURES_LARGE=1`); in large mode those run and the one skip
+is the guard that asserts the large set is *not* built in a normal run.
 
 Skip census (68): 21 real clinical file absent by design, 10 `gubbins`, 20
 opt-in `pyseer` (`PAPIPELINE_TEST_PYSEER=1`), 12 empty-parametrize tests that

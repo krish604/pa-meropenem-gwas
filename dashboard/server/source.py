@@ -63,6 +63,19 @@ BUNDLE_VALIDATION_DIR = "05_validation"
 BUNDLE_RUNBOOK_DIR = "06_for_900_isolates"
 RUNBOOK_NAME = "RUNBOOK_900.md"
 
+#: The **actual delivery layout** a REAL run was handed over in, which differs
+#: from DESIGN §12's A1–A5 assumption: the stage tables are under
+#: `artifacts/stage_tables/`, the logs under `artifacts/logs/`, the folded-step
+#: tables under `artifacts/intermediate/`, and the guard evidence under
+#: `guards/`. There is no `run_manifest.json` (written only on success) and no
+#: `status/events.jsonl`, so per-stage state is derived from the logs by
+#: `stage_logs.derive`. Both layouts are probed; neither is guessed.
+DELIVERY_STAGE_DIR = Path("artifacts") / "stage_tables"
+DELIVERY_INTERMEDIATE_DIR = Path("artifacts") / "intermediate"
+DELIVERY_LOG_DIR = Path("artifacts") / "logs"
+DELIVERY_GUARDS_DIR = "guards"
+DELIVERY_PROVENANCE_DIR = "provenance"
+
 #: Inside a bundle's `02_stage_outputs/`, the stage tables may be directly there
 #: (A2 says it is the bundle's copy of `intermediate/stages/`), under a `stages/`
 #: directory, or under an `intermediate/stages/` that mirrors the live tree. All
@@ -480,8 +493,15 @@ class BundleSource(_BaseSource):
 
     kind: str = field(default="bundle", init=False)
     stage_probe: Path = Path(".")
+    #: `"assumed"` is DESIGN §12's A1–A5 layout (`02_stage_outputs/`); the
+    #: `"delivery"` layout is the one a REAL run actually arrived in
+    #: (`artifacts/stage_tables/`, `artifacts/logs/`, `guards/`). The two share
+    #: `stage_dir` semantics but not the non-contracted artefact locations.
+    layout: str = "assumed"
 
     def _optional_paths(self, key: str) -> Sequence[Path]:
+        if self.layout == "delivery":
+            return self._delivery_paths(key)
         root = self.root
         stages = self.stage_dir
         if key == "run_manifest":
@@ -538,6 +558,65 @@ class BundleSource(_BaseSource):
                 root / BUNDLE_RUN_INFO_DIR / "reuse_provenance.tsv",
                 stages / "reuse_provenance.tsv",
             )
+        return ()
+
+    def _delivery_paths(self, key: str) -> Sequence[Path]:
+        """The non-contracted artefacts of the actual delivery layout.
+
+        Every path is probed, never assumed: the bundle's `README.md` names what
+        it holds and each probe here corresponds to one line of it.
+        """
+        root = self.root
+        stages = self.stage_dir
+        intermediate = root / DELIVERY_INTERMEDIATE_DIR
+        logs = root / DELIVERY_LOG_DIR
+        guards = root / DELIVERY_GUARDS_DIR
+        if key == "run_manifest":
+            # Written only on success; a failed run leaves none. Probed anyway.
+            return (root / "run_manifest.json", intermediate / "run_manifest.json")
+        if key == "figure_data":
+            return (stages / "figure_data",)
+        if key == "phylogeny_dir":
+            return (intermediate / "phylogeny", root / "intermediate" / "phylogeny")
+        if key == "similarity_units":
+            matrix = table_path(stages, "similarity")
+            return (
+                units_sidecar_path(matrix),
+                matrix.with_suffix(UNITS_SIDECAR_SUFFIX),
+            )
+        if key == "variants_provenance":
+            return (
+                intermediate / "variants_provenance.json",
+                intermediate / "variants" / "variants_provenance.json",
+                stages / "variants_provenance.json",
+            )
+        if key == "reports_dir":
+            # The bundle's own prose lives at its root: README.md, GUARDS.md,
+            # PER_STAGE_OUTCOMES.md. Discovered by extension, never by name.
+            return (root,)
+        if key == "events_log":
+            # No `status/events.jsonl` in this bundle; the per-stage record is
+            # the logs below, read by `stage_logs.derive`.
+            return (root / EVENT_LOG_RELATIVE, logs / "events.jsonl")
+        if key == "tripwire_log":
+            # GUARD 2's tripwire log is `guards/calls.log` (0 bytes = 0
+            # invocations). The prior run's non-empty log is a different file
+            # and is never read here.
+            return (guards / "calls.log", logs / "tripwire.log")
+        if key == "watcher_log":
+            return (guards / "watcher.log", logs / "watcher.log")
+        if key == "runbook":
+            return (root / RUNBOOK_NAME,)
+        if key == "annotation_reuse":
+            return (
+                intermediate / "reuse_provenance.tsv",
+                intermediate / "annotation" / "reuse_provenance.tsv",
+                stages / "reuse_provenance.tsv",
+            )
+        if key == "full_run_log":
+            return (logs / "full_run.log",)
+        if key == "stage_log_dir":
+            return (logs,)
         return ()
 
     def newick_paths(self) -> List[Path]:
@@ -607,6 +686,26 @@ def _probe_live(mode: RunMode, n: int, label: str, config: Any) -> Probe:
 def _resolve_live_stage_dir(path: Path) -> Optional[Path]:
     candidate = path / "intermediate" / "stages"
     return candidate if candidate.is_dir() else None
+
+
+def _resolve_delivery_stage_dir(path: Path) -> Optional[Path]:
+    """Where the actual delivery layout keeps its stage tables.
+
+    `artifacts/stage_tables/` holds the stage and folded-step tables directly
+    (A2 is wrong about the directory name, not about the shape). Accepted when
+    that directory exists and holds at least one declared stage table **or**
+    the run's `artifacts/logs/full_run.log`, so a run that failed before writing
+    a table is still openable and can be reported honestly.
+    """
+    candidate = (path / DELIVERY_STAGE_DIR)
+    if not candidate.is_dir():
+        return None
+    for _stage, (filename, _cols) in STAGE_TABLES.items():
+        if (candidate / filename).exists():
+            return candidate.resolve()
+    if (path / DELIVERY_LOG_DIR / "full_run.log").is_file():
+        return candidate.resolve()
+    return None
 
 
 def _resolve_bundle_stage_dir(path: Path) -> Optional[Tuple[Path, Path]]:
@@ -725,21 +824,41 @@ def detect(
             continue
         path = probe.path
         if probe.probe.startswith("bundle"):
+            # Both bundle layouts are accepted at the bundle probe: DESIGN
+            # §12's assumed `02_stage_outputs/` and the actual delivery
+            # `artifacts/stage_tables/`. The assumed one is tried first so an
+            # existing bundle is served exactly as before.
             resolved = _resolve_bundle_stage_dir(path)
-            if resolved is None:
-                # Configured as a bundle but not shaped like one. Recorded as
-                # a failed probe rather than silently opened as a live tree.
-                probes[probe.n - 1] = Probe(
-                    probe.n,
-                    probe.probe,
-                    path,
-                    False,
-                    "present but holds no pipeline output",
+            if resolved is not None:
+                stage_dir, sub = resolved
+                source = BundleSource(root=path.resolve(), stage_dir=stage_dir)
+                return _finish(source, probes, {"bundle_probe": str(sub)})
+            delivery = _resolve_delivery_stage_dir(path)
+            if delivery is not None:
+                source = BundleSource(
+                    root=path.resolve(), stage_dir=delivery, layout="delivery"
                 )
-                continue
-            stage_dir, sub = resolved
-            source = BundleSource(root=path.resolve(), stage_dir=stage_dir)
-            return _finish(source, probes, {"bundle_probe": str(sub)})
+                return _finish(source, probes, {"bundle_probe": "delivery"})
+            # Configured as a bundle but not shaped like one. Recorded as
+            # a failed probe rather than silently opened as a live tree.
+            probes[probe.n - 1] = Probe(
+                probe.n,
+                probe.probe,
+                path,
+                False,
+                "present but holds no pipeline output",
+            )
+            continue
+
+        # A person-given root (--results-root / PA_DASH_RESULTS_ROOT). The
+        # actual delivery layout is recognised before the live tree, because a
+        # bundle handed over as `--results-root` is still a bundle.
+        delivery = _resolve_delivery_stage_dir(path)
+        if delivery is not None:
+            source = BundleSource(
+                root=path.resolve(), stage_dir=delivery, layout="delivery"
+            )
+            return _finish(source, probes, {"bundle_probe": "delivery"})
 
         stage_dir = _resolve_live_stage_dir(path)
         manifest_at_root = (path / "run_manifest.json").exists()
@@ -795,12 +914,22 @@ def _finish(
         source = LiveSource(root=source.root, stage_dir=source.stage_dir)
 
     writer = manifest_writer(manifest)
+    # No manifest is not "no record". A failed run leaves its per-stage state
+    # in `artifacts/logs/full_run.log` and one `stage_<name>.log` per stage it
+    # reached; derive it there so a stage that ran is never rendered `not_run`
+    # with the pre-run-manifest sentence. None when there is nothing to derive.
+    from . import stage_logs
+
+    derived = stage_logs.derive(
+        source.root, source.stage_dir, layout=getattr(source, "layout", "")
+    )
     detail.update(
         {
             "run_manifest": manifest,
             "manifest_reason": reason,
             "manifest_path": manifest_path,
             "manifest_writer": writer,
+            "derived_stage_state": derived.as_dict() if derived is not None else None,
         }
     )
     return source, probes, detail
@@ -854,6 +983,11 @@ __all__ = [
     "BUNDLE_RUNBOOK_DIR",
     "BUNDLE_STAGE_DIR",
     "BUNDLE_VALIDATION_DIR",
+    "DELIVERY_GUARDS_DIR",
+    "DELIVERY_INTERMEDIATE_DIR",
+    "DELIVERY_LOG_DIR",
+    "DELIVERY_PROVENANCE_DIR",
+    "DELIVERY_STAGE_DIR",
     "ENV_BUNDLE",
     "ENV_RESULTS_ROOT",
     "EVENT_LOG_RELATIVE",

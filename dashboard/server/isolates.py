@@ -282,7 +282,15 @@ def row_for(sample: str, index: _Index, oprd: Optional[Mapping[str, Any]] = None
     else:
         n_virulence = index.virulence.get(sample, 0)
 
-    phenotype = index.phenotype.get(sample)
+    # A missing phenotype table and a present table with no row for this sample
+    # both read `not assessed`: the run recorded no SIR call, and `None` would
+    # render as a blank cell, which is exactly the plausible absence UI-D2
+    # refuses. (When the table is present and holds a row, the value is verbatim,
+    # and `ND` is a recorded value.)
+    if not index.phenotype_present:
+        phenotype: Any = NOT_ASSESSED
+    else:
+        phenotype = index.phenotype.get(sample, NOT_ASSESSED)
     lineage = index.lineage.get(sample, NOT_ASSESSED) if index.lineage_present else NOT_ASSESSED
 
     if index.variants_present and sample in index.variants:

@@ -184,6 +184,11 @@ def build_state(
         state.source = source
         state.probes = tuple(probes)
         state.detail = detail
+        # With no manifest the antibiotic comes from the log's run header; a
+        # config default would be a different run's antibiotic.
+        derived = _derived_stage_state(state)
+        if derived is not None and derived.get("antibiotic"):
+            state.antibiotic = str(derived["antibiotic"])
         directory.write_session(
             root=source.root,
             kind=source.kind,
@@ -361,6 +366,32 @@ def _run_mode(manifest: Optional[Mapping[str, Any]]) -> Optional[str]:
     return None
 
 
+def _derived_stage_state(state: AppState) -> Optional[Mapping[str, Any]]:
+    """The per-stage record derived from the logs when no manifest exists.
+
+    None for every source that has a manifest, a pre-run manifest, or no log
+    evidence at all; then `badges.classify` keeps its existing behaviour.
+    """
+    derived = state.detail.get("derived_stage_state")
+    return derived if isinstance(derived, Mapping) and derived.get("records") else None
+
+
+def _effective_run_mode(state: AppState) -> Optional[str]:
+    """The run's mode, from the manifest or, when there is none, the log.
+
+    The delivery bundle has no manifest but `full_run.log` states
+    `=== REAL mode | 10 samples | ... ===`, so the mode is still a recorded
+    fact rather than an unknown.
+    """
+    mode = _run_mode(state.manifest)
+    if mode:
+        return mode
+    derived = _derived_stage_state(state)
+    if derived is not None and derived.get("run_mode"):
+        return str(derived["run_mode"])
+    return None
+
+
 def _event_signals(state: AppState) -> Dict[str, Any]:
     """Per-stage `start`/`fail` evidence from the log, keyed on stage name.
 
@@ -402,18 +433,40 @@ def _stage_payload(
     manifest = state.manifest
     read = source.stage_table(stage)
     signal = (signals or {}).get(stage, {})
+    derived = _derived_stage_state(state)
+    if isinstance(manifest, Mapping):
+        manifest_state = _manifest_state(stage, manifest)
+        skipped = _manifest_skipped(manifest)
+        records_stages = _manifest_records_stages(manifest)
+        # A REAL-refusing stage under a manifest is `refused`; that path is
+        # kept exactly as it was.
+        badge_run_mode = _run_mode(manifest)
+    elif derived is not None:
+        manifest_state = (derived.get("states") or {}).get(stage)
+        skipped = {str(k): str(v) for k, v in (derived.get("reasons") or {}).items()}
+        records_stages = True
+        # The derived record already says *why* each stage is where it is
+        # (failed at stage 7, or blocked by it). Running the REAL-refusal rule
+        # here would relabel a never-reached stage `refused` with a reason that
+        # never applied to it, so it is deliberately not consulted.
+        badge_run_mode = None
+    else:
+        manifest_state = None
+        skipped = {}
+        records_stages = False
+        badge_run_mode = None
     badge = badge_module.classify(
         stage,
-        manifest_state=_manifest_state(stage, manifest),
+        manifest_state=manifest_state,
         table_present=read.present,
         table_reason=read.reason,
-        stages_skipped=_manifest_skipped(manifest),
-        run_mode=_run_mode(manifest),
+        stages_skipped=skipped,
+        run_mode=badge_run_mode,
         has_start_event=bool(signal.get("start")),
         has_terminal_event=bool(signal.get("terminal")),
         has_fail_event=bool(signal.get("fail")),
         fail_event_sentence=str(signal.get("sentence") or ""),
-        manifest_records_stages=_manifest_records_stages(manifest),
+        manifest_records_stages=records_stages,
     )
     internal: List[Dict[str, Any]] = []
     for key, owner in (("structural_variants", "amr"), ("regulators", "amr"),
@@ -508,7 +561,7 @@ def _routes(app: FastAPI) -> None:
             "source_kind": state.kind if state.source is not None else None,
             "root": str(state.root) if state.root is not None else None,
             "manifest_writer": state.manifest_writer,
-            "mode": _run_mode(state.manifest),
+            "mode": _effective_run_mode(state),
             "pipeline_version": (
                 state.manifest.get("pipeline_version")
                 if isinstance(state.manifest, Mapping)
@@ -539,10 +592,11 @@ def _routes(app: FastAPI) -> None:
             "manifest_writer": writer,
             "manifest_gaps": source_module.manifest_gaps(manifest, writer),
             "manifest_path": str(state.detail.get("manifest_path") or ""),
-            "run_mode": _run_mode(manifest),
+            "run_mode": _effective_run_mode(state),
             "antibiotic": (
                 manifest.get("antibiotic") if isinstance(manifest, Mapping) else state.antibiotic
             ),
+            "derived_stage_state": state.detail.get("derived_stage_state"),
             "n_samples": n_samples,
             "generated_at_utc": manifest.get("generated_at_utc") if isinstance(manifest, Mapping) else None,
             "pipeline_version": manifest.get("pipeline_version") if isinstance(manifest, Mapping) else None,
@@ -1053,7 +1107,7 @@ def _banner(state: AppState) -> Optional[str]:
     A STUB or TEST run must not read as an analysis, so the banner travels with
     the run summary rather than being composed by the client.
     """
-    mode = _run_mode(state.manifest)
+    mode = _effective_run_mode(state)
     try:
         from papipeline.models import RunMode as _Mode
 
@@ -1075,6 +1129,13 @@ def _n_samples(state: AppState, manifest: Optional[Mapping[str, Any]]) -> Option
             value = manifest.get(key)
             if isinstance(value, int) and not isinstance(value, bool):
                 return value
+    # The log records the cohort when no manifest does (`=== REAL mode | 10
+    # samples | ... ===`).
+    derived = _derived_stage_state(state)
+    if derived is not None:
+        value = derived.get("n_samples")
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
     # Derived from a per-sample table when the manifest says nothing.
     source = state.source
     if source is None:
@@ -1540,14 +1601,21 @@ def _tree_impl(state: AppState, source: str) -> Dict[str, Any]:
     """The stage-9 tree as structural JSON, with node ids by postorder index."""
     paths = state.source.newick_paths()
     if not paths:
+        reason = (
+            f"{NOT_PRODUCED}: no Newick file was found. Probed "
+            f"the stage-9 phylogeny directory declared by "
+            f"`config.loader.phylogeny_dir`. A tree's absence is a gap in "
+            f"the run's durable record, not an empty tree."
+        )
+        derived = _derived_stage_state(state)
+        stage9 = (derived.get("reasons") or {}).get("phylogeny") if derived else None
+        if stage9:
+            # Name the stage's own state when the log records one, so a
+            # never-reached stage is not left reading as a missing file.
+            reason += f" Stage 9 (phylogeny) is recorded as: {stage9}"
         return {
             "present": False,
-            "reason": (
-                f"{NOT_PRODUCED}: no Newick file was found. Probed "
-                f"the stage-9 phylogeny directory declared by "
-                f"`config.loader.phylogeny_dir`. A tree's absence is a gap in "
-                f"the run's durable record, not an empty tree."
-            ),
+            "reason": reason,
             "probes": [
                 {"n": 1, "path": str(p), "ok": False, "reason": "no file at this path"}
                 for p in ([state.source.optional("phylogeny_dir")] if state.source.optional("phylogeny_dir") else [])
@@ -2337,6 +2405,7 @@ def _oprd_impl(
     filter_params: Mapping[str, List[str]],
 ) -> Dict[str, Any]:
     items, probes, reason = oprd_module.collect(state.root)
+    locus_items, locus_reason = oprd_module.locus_coverage(state.root)
     available = [
         "sample_id", "verdict", "lesion_type", "position",
         "truncation_aa", "identity_pct", "coverage_pct", "display_state",
@@ -2352,6 +2421,20 @@ def _oprd_impl(
         "items": selected,
         "verdict_vocabulary": list(oprd_module.VERDICTS),
         "display_states": list(oprd_module.DISPLAY_STATES),
+        # The locus-coverage gate is a SECOND instrument, reported beside the
+        # structural verdict rather than merged into it.
+        "locus_coverage": {
+            "available": bool(locus_items),
+            "reason": locus_reason,
+            "items": locus_items,
+            "note": (
+                "A different instrument from the tblastn structural call: the "
+                "coverage gate asks whether an alignment spanned the locus, the "
+                "structural call asks whether the ORF is intact in the assembly. "
+                "A `refused:insufficient_coverage` row here does not contradict a "
+                "structural verdict, and the two are never merged."
+            ),
+        },
         "meta": page_meta(
             parsed,
             total=total,

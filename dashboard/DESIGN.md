@@ -925,11 +925,11 @@ Every unverified assumption, with what breaks if it is wrong.
 
 | # | assumption | why | blast radius if wrong |
 |---|---|---|---|
-| A1 | **The delivery bundle layout** is `01_bakta_input/`, `02_stage_outputs/`, `03_report/`, `04_run_info/`, `05_validation/`, `06_for_900_isolates/RUNBOOK_900.md` | given in the brief; **not described in any doc or branch visible here** — grepped `docs/`, `.scratch/`, `TASKS.md` | probe 3 fails to find a bundle that exists. Mitigated: the probe order is tolerant and probes 4–6 do not depend on it; the `kind` is decided by where `run_manifest.json` lands, not by which probe matched. Fix: edit one probe, nothing else. |
-| A2 | `02_stage_outputs/` is the bundle's copy of `intermediate/stages/` | inferred from the name | stage tables are not found in a bundle. The live adapter is unaffected. |
-| A3 | `03_report/` holds the `.md`/`.html` | inferred from the name | report listing is empty; the endpoint returns `not produced` with probes. |
+| A1 | **The delivery bundle layout** is `01_bakta_input/`, `02_stage_outputs/`, `03_report/`, `04_run_info/`, `05_validation/`, `06_for_900_isolates/RUNBOOK_900.md` | given in the brief; **not described in any doc or branch visible here** — grepped `docs/`, `.scratch/`, `TASKS.md` | **CORRECTED in Phase 3.** The REAL bundle arrived in a different layout — `artifacts/stage_tables/`, `artifacts/intermediate/`, `artifacts/logs/`, `guards/`, `provenance/` — with no `run_manifest.json` and no `status/events.jsonl`. `BundleSource` now carries a `layout` (`"assumed"`/`"delivery"`) and both are probed; the assumed probes are unchanged. See the note below the table. |
+| A2 | `02_stage_outputs/` is the bundle's copy of `intermediate/stages/` | inferred from the name | Holds for the assumed layout. The delivery layout keeps the same filenames under `artifacts/stage_tables/`, which `BundleSource(layout="delivery")` reads with the same `contracts.py` paths. |
+| A3 | `03_report/` holds the `.md`/`.html` | inferred from the name | In the delivery layout the bundle's prose (`README.md`, `GUARDS.md`, `PER_STAGE_OUTCOMES.md`) sits at the root, discovered by extension. |
 | A4 | `05_validation/` holds the validation-stage artefacts | inferred from the name | same as A3. |
-| A5 | **`RUNBOOK_900.md` per-isolate timings are unavailable** | no delivery bundle exists (`PA_AMR_pipeline_real_run_10_isolates` is absent) | the launcher shows "timings not recorded" (UI-D2) — which is the designed behaviour, not a failure |
+| A5 | **`RUNBOOK_900.md` per-isolate timings are unavailable** | no delivery bundle exists (`PA_AMR_pipeline_real_run_10_isolates` is absent) | the launcher shows "timings not recorded" (UI-D2) — which is the designed behaviour, not a failure. The REAL bundle still ships no runbook, so this remains true. |
 | A6 | **`run_manifest.json` carries no `bakta_executions` field** | not in either writer's payload; the annotation-reuse commit changed the stage, not the manifest | the provenance page shows `not reported` for "Bakta executions: N". The count must then be derived from the reuse provenance, or the field is added — a BACKEND proposal, not a silent `0`. |
 | A7 | No tripwire/watcher log path is contracted | none found in `contracts.py` or the Snakefile | the log panel is empty with `not produced` and a probe list. |
 | A8 | `variants_provenance.json` lands in stage 6's workdir, whose location is not contracted | `variants.py:562` passes `workdir / PROVENANCE_NAME`; the workdir path is not in `contracts.py` | per-isolate `n_snv`/`n_indel` read `not_assessed`. Probed at several candidate paths, all listed in the error. |
@@ -939,6 +939,34 @@ Every unverified assumption, with what breaks if it is wrong.
 | A12 | The observatory stays off by default and untouched | `runtime.observatory.enabled: false`; the dashboard does not import it | none. If it were enabled, the dashboard is still unaffected — that is the point of § 6.1 |
 | A13 | `similarity.units.json` is written beside `similarity.tsv` | `similarity.py:109` | the matrix renders with `units: null` and the UI says the units are not recorded — **not** "substitutions per site" as an assumption |
 | A14 | `stage_tool_requirements` and `tools_detected` are both rendered from whichever the manifest writer produced | both writers verified | the tool matrix shows `not reported` rather than an empty matrix |
+
+### A1–A2 corrected: the actual delivery layout, and no manifest
+
+The REAL 10-isolate run was handed over as:
+
+```
+README.md  GUARDS.md  PER_STAGE_OUTCOMES.md
+artifacts/stage_tables/   01_validation.tsv … cohort_variants.tsv
+artifacts/intermediate/   *_determinants.tsv, regulator_screen.json, oprd_structural_calls.tsv, …
+artifacts/logs/           full_run.log, snakemake_stdout.log, stage_*.log
+guards/                   calls.log, watcher.log, …
+provenance/               smoke_isolates.txt, bakta-source-map.tsv
+```
+
+There is **no `run_manifest.json`** (written only on success; this run failed at
+stage 7) and **no `status/events.jsonl`**. Per-stage state is therefore derived
+by `dashboard/server/stage_logs.py` from `artifacts/logs/full_run.log` (the
+`--- stage <name> ---` markers and the verbatim `Stage <name> ended FAILED:`
+line) plus one `artifacts/logs/stage_<name>.log` per stage reached. The result
+is fed to `badges.classify` in the same `{states, reasons}` shape the manifest
+reader uses, so no page learns a second vocabulary. A stage that ran but whose
+table is missing is left `completed` and downgraded to `not_assessed` by
+`classify`, which supplies the `TableRead` reason. Stages 8–16 are `not_run`
+with a reason that names the stage that blocked them; stage 7 itself is
+`failed` with the log's verbatim `ToolNotAvailableError`. The REAL-refusal rule
+(`REAL_REFUSING_STAGES`) is deliberately **not** consulted for a derived
+record: a stage that never ran must not be relabelled `refused` with a reason
+that never applied to it.
 
 **Fallback if A11 ever fails:** `papipeline/stages/phylogeny.py` already contains
 a hand-rolled recursive-descent Newick parser (`_NewickParser`) that extracts tip

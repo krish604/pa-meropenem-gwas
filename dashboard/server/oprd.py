@@ -84,6 +84,12 @@ def probe_paths(root) -> List[Any]:
     Contracted first, then bundle-supplied. A bundle may have collected the
     table under a name the pipeline does not declare, and the endpoint probes
     for that rather than assuming it does not exist.
+
+    The last path is the **actual delivery layout's** structural-call table:
+    the REAL run wrote `artifacts/intermediate/oprd_structural_calls.tsv`, whose
+    verdict column is `structural_verdict` (`intact`/`disrupted`) rather than
+    the `verdict` vocabulary a contracted table would carry. It is probed, not
+    assumed, and the two column shapes are read by `_read_candidate`.
     """
     from pathlib import Path
 
@@ -98,11 +104,32 @@ def probe_paths(root) -> List[Any]:
         root / "03_report" / "oprd.tsv",
         root / "04_run_info" / "oprd.tsv",
         root / "05_validation" / "oprd.tsv",
+        root / "artifacts" / "intermediate" / "oprd_structural_calls.tsv",
     ]
 
 
+#: The verdict column a contracted oprD table carries, and the structural-call
+#: column the delivery run's tblastn table carries instead. Both are accepted;
+#: neither is coerced into the other's vocabulary.
+VERDICT_COLUMN = "verdict"
+STRUCTURAL_VERDICT_COLUMN = "structural_verdict"
+
+#: The structural-call values that assert the locus was resolved. Anything else
+#: is a refusal, mapped to `not_assessed`, never `absent`.
+STRUCTURAL_RESOLVED = ("intact", "disrupted")
+
+
 def _read_candidate(path) -> Tuple[Optional[TableRead], Dict[str, Any]]:
-    """Try one candidate path, and say why it did or did not yield verdicts."""
+    """Try one candidate path, and say why it did or did not yield verdicts.
+
+    Two column shapes are accepted, and neither is coerced into the other:
+
+    * a **contracted** table carrying `verdict`, whose values must be in the
+      `adapters.oprd_locus.Verdict` vocabulary; and
+    * the delivery run's **structural-call** table carrying
+      `structural_verdict` (`intact`/`disrupted`), which is the tblastn verdict
+      and not the locus-coverage verdict.
+    """
     from pathlib import Path
 
     from papipeline.stages.report_tables import read_table
@@ -114,14 +141,51 @@ def _read_candidate(path) -> Tuple[Optional[TableRead], Dict[str, Any]]:
             "ok": False,
             "reason": "no file at this path",
         }
-    read = read_table("oprd", path, required_columns=("sample_id", "verdict"))
+    # `sample_id` is the one column both shapes share, so the reader is asked
+    # only for that and the verdict column is checked below.
+    read = read_table("oprd", path, required_columns=("sample_id",))
     if not read.present:
         return None, {"path": str(path), "ok": False, "reason": read.reason}
+    header = set(read.rows[0].keys()) if read.rows else set()
+    if STRUCTURAL_VERDICT_COLUMN in header:
+        unknown = sorted(
+            {
+                str(row.get(STRUCTURAL_VERDICT_COLUMN))
+                for row in read.rows
+                if str(row.get(STRUCTURAL_VERDICT_COLUMN)) not in DISPLAY_STATES
+            }
+        )
+        if unknown:
+            return None, {
+                "path": str(path),
+                "ok": False,
+                "reason": (
+                    f"{path} carries structural_verdict value(s) {unknown}, "
+                    f"which are not in viz.OPRD_STATE_ORDER {list(DISPLAY_STATES)}. "
+                    f"A structural state outside that vocabulary is not coerced."
+                ),
+            }
+        return read, {
+            "path": str(path),
+            "ok": True,
+            "reason": f"read {read.n_rows} structural call(s)",
+            "shape": "structural_verdict",
+        }
+    if VERDICT_COLUMN not in header:
+        return None, {
+            "path": str(path),
+            "ok": False,
+            "reason": (
+                f"{path} carries neither a `{VERDICT_COLUMN}` nor a "
+                f"`{STRUCTURAL_VERDICT_COLUMN}` column, so it is not a source "
+                f"of oprD verdicts."
+            ),
+        }
     unknown = sorted(
         {
-            str(row.get("verdict"))
+            str(row.get(VERDICT_COLUMN))
             for row in read.rows
-            if str(row.get("verdict")) not in VERDICTS
+            if str(row.get(VERDICT_COLUMN)) not in VERDICTS
         }
     )
     if unknown:
@@ -149,7 +213,14 @@ def display_state_for(verdict: Optional[str], lesion_type: Optional[str] = None)
     ten-isolate cohort.
     """
     if verdict == Verdict.RESOLVED:
-        if lesion_type:
+        # `no_lesion` is an explicit "the ORF is intact", not a lesion. The
+        # earlier truthiness test read it as one and turned every intact
+        # verdict into `disrupted`; the string is compared instead.
+        if lesion_type and str(lesion_type).strip().lower() not in (
+            "",
+            "no_lesion",
+            "none",
+        ):
             return "disrupted"
         return "intact"
     return "not_assessed"
@@ -168,10 +239,25 @@ def collect(root) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Optional[
         probes.append({"n": index, **record})
         if read is None:
             continue
+        header = set(read.rows[0].keys()) if read.rows else set()
+        structural = STRUCTURAL_VERDICT_COLUMN in header
         items: List[Dict[str, Any]] = []
         for row in read.rows:
-            verdict = str(row.get("verdict"))
             lesion = row.get("lesion_type")
+            if structural:
+                # The tblastn call: `structural_verdict` IS the display state
+                # (`intact`/`disrupted`), and it resolves the locus — the only
+                # other values it could carry are the display states `absent`
+                # and `not_assessed`, which map to the refusal vocabulary.
+                display = str(row.get(STRUCTURAL_VERDICT_COLUMN))
+                verdict = (
+                    Verdict.RESOLVED
+                    if display in STRUCTURAL_RESOLVED
+                    else _verdict_for_display(display)
+                )
+            else:
+                verdict = str(row.get(VERDICT_COLUMN))
+                display = display_state_for(verdict, lesion)
             items.append(
                 {
                     "sample_id": str(row.get("sample_id")),
@@ -181,7 +267,7 @@ def collect(root) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Optional[
                     "truncation_aa": _int_or_none(row.get("truncation_aa")),
                     "identity_pct": _float_or_none(row.get("identity_pct")),
                     "coverage_pct": _float_or_none(row.get("coverage_pct")),
-                    "display_state": display_state_for(verdict, lesion),
+                    "display_state": display,
                     # Every additional column the verdict row carries, so the
                     # repeat / compensating-indel / tblastn evidence DESIGN §4.3
                     # requires reaches the UI. A contracted table that names
@@ -190,7 +276,8 @@ def collect(root) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Optional[
                     "evidence": {
                         k: v
                         for k, v in row.items()
-                        if k not in ("sample_id", "verdict") and v is not None
+                        if k not in ("sample_id", VERDICT_COLUMN, STRUCTURAL_VERDICT_COLUMN)
+                        and v is not None
                     }
                     or None,
                 }
@@ -213,6 +300,34 @@ def _float_or_none(value: Any) -> Optional[float]:
         return None
 
 
+def _verdict_for_display(display: str) -> str:
+    """The refusal a structural display state maps to.
+
+    `absent` and `not_assessed` are the only structural states that are not a
+    resolution. Both are refusals in the `Verdict` vocabulary; neither is
+    coerced into `resolved`.
+    """
+    if display == "not_assessed":
+        return Verdict.NO_HIT
+    if display == "absent":
+        return Verdict.NO_HIT
+    return Verdict.NO_HIT
+
+
+def locus_coverage(root) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """The separate oprD locus-coverage gate, from the run's own log.
+
+    A different instrument from the tblastn structural call (DESIGN §4.3): the
+    coverage gate asks "did an alignment span this locus", the structural call
+    asks "is the ORF intact in the assembly". Both are reported; neither is
+    merged into the other. Delegates to `stage_logs.locus_coverage`, which
+    parses the delivery layout's `artifacts/logs/full_run.log`.
+    """
+    from .stage_logs import locus_coverage as _parse
+
+    return _parse(root)
+
+
 def by_sample(items: Sequence[Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """The verdicts keyed on sample, for the isolate view's join.
 
@@ -226,9 +341,13 @@ __all__ = [
     "DISPLAY_STATES",
     "EXPECTED_COLUMNS",
     "REASON",
+    "STRUCTURAL_RESOLVED",
+    "STRUCTURAL_VERDICT_COLUMN",
     "VERDICTS",
+    "VERDICT_COLUMN",
     "by_sample",
     "collect",
     "display_state_for",
+    "locus_coverage",
     "probe_paths",
 ]

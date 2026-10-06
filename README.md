@@ -96,6 +96,9 @@ python3 scripts/common/run_pipeline.py --mode TEST --dry-run
 
 # 5. run one stage
 python3 scripts/common/run_stage.py --mode TEST --stage amr
+
+# 6. start the read-only results dashboard (writes only ~/.pa_dashboard/)
+scripts/run_dashboard.sh --results <results-dir> --port 8765
 ```
 
 The run writes:
@@ -252,7 +255,13 @@ python3 -m pytest tests dashboard/tests -q   # 3502 tests
 python3 -m pytest tests/unit -q             # parsers and stage logic
 python3 -m pytest tests/integration -q      # config, full run, mode gating
 python3 -m pytest dashboard/tests -q        # dashboard server and sources
+node --test dashboard/tests/js/             # dashboard page modules (no npm)
 ```
+
+The dashboard suite is **112 passed, 3 skipped** by default and **114 passed,
+1 skipped** with `PA_FIXTURES_LARGE=1` (the 900-isolate perf gates); `node --test`
+adds 32. See [`dashboard/README.md`](dashboard/README.md) for the UI's own
+security model and layout notes.
 
 Latest full run: **3434 passed, 68 skipped, 0 failed**.
 
