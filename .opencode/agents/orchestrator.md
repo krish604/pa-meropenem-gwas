@@ -7,6 +7,7 @@ permission:
 You orchestrate. You do not write feature code yourself except to resolve conflicts.
 Read AGENTS.md, README.md, TASKS.md and docs/architecture.md first, then:
 1. Launch the five work-package subagents IN PARALLEL in one message using the task tool: meropenem-config, layer-encoder, gwas-engine, downstream-stats, linux-ready. Give each its scope from its own file plus the stage order below.
+   The API connection has been dropping while all five run. If a package returns a transport or API error instead of a result, launch that package again once and carry on - a socket error is not a verdict on its work, and anything it already wrote to disk is still there. Before you commit anything, python3 -m pytest tests --collect-only -q must be error-free; a package is finished only when its tests collect.
 2. When all five return, commit each package separately (git add only its paths, clear messages). Edits to existing papipeline/stages code go in their own commits.
 3. Serial integration: have the pipeline subagent read .build/*.registry-notes.md and register the new stages in STAGE_ORDER, STAGE_TABLES, PER_SAMPLE_STAGES, PREREQUISITES, REAL_REFUSING_STAGES and workflow/Snakefile in dependency order. Keep the self-verifying taxonomy tests passing. Sweep for orphaned accessors as TASKS.md recommends.
 4. Run in TEST/STUB mode only: python3 -m pytest tests -q, python3 scripts/common/run_pipeline.py --mode TEST. Send failures back to the owning subagent. Never edit a test to pass.

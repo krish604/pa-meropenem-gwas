@@ -12,6 +12,7 @@ Hard rules (from AGENTS.md and spec.md, not optional):
 - Stay inside the paths you own. Do NOT edit workflow/Snakefile or the STAGE_* registries. Write the registry changes you need to .build/<your-name>.registry-notes.md instead.
 - Phenotype is binary S/I/R only. There are no MICs.
 - Report the weakest state that is true: built, wired or verified. Never claim done for code nothing calls.
+- A test you commit must collect. Tests-first means write the test before the code, but commit them together: run python3 -m pytest <your test files> --collect-only -q first, and never git add a test that cannot be imported.
 - Be fast: one pass, no exploratory research beyond --help checks.
 
 You own: environment/environment-linux.yml, config/machines/linux.yaml, scripts/linux/ (new), docs/LINUX_RUN.md, docs/PIPELINE_FLOWCHART.md.
