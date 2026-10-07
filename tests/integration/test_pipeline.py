@@ -35,7 +35,12 @@ from papipeline.testing import SYNTHETIC_BANNER
 class TestConfiguration:
     def test_loads(self, config):
         assert config.organism["name"] == "Pseudomonas aeruginosa"
-        assert config.antibiotics == ("imipenem",)
+        # The meropenem GWAS build enables both antibiotics (the old assertion
+        # `== ("imipenem",)` encoded the state this build deliberately
+        # reverses). imipenem must stay first: config.antibiotics[0] is read
+        # as the project's fallback antibiotic by several stages.
+        assert config.antibiotics == ("imipenem", "meropenem")
+        assert config.antibiotics[0] == "imipenem"
 
     def test_allowed_phenotypes(self, config):
         assert {p.value for p in config.allowed_phenotypes} == {
@@ -201,20 +206,67 @@ class TestConfigValidation:
 class TestAntibioticExtensibility:
     """Adding an antibiotic must be a configuration change, not a code change."""
 
-    def test_meropenem_is_declared_but_disabled(self, config):
+    def test_meropenem_is_declared_and_enabled(self, config):
+        """Declared *and* enabled - the property at its new address.
+
+        The original test asserted `test_meropenem_is_declared_but_disabled`
+        : meropenem was in `config/antibiotics.tsv` but absent from
+        science.yaml's `antibiotics:` list. The meropenem GWAS build reversed
+        that premise deliberately - this pipeline now analyses meropenem - so
+        the declared-but-disabled state no longer exists anywhere to test.
+        The same property at its new address is: the table declares it AND
+        the config enables it. (No third antibiotic was invented just to keep
+        the old name green.) If either half regresses, one of these two
+        assertions fails.
+        """
         assert "meropenem" in config.antibiotic_specs
-        assert "meropenem" not in config.antibiotics
+        assert "meropenem" in config.antibiotics
 
     def test_enabling_meropenem_requires_no_code_change(self, tmp_path, pipeline_root):
+        """The documented edit alone must enable the antibiotic - and this
+        test must actually *perform* that edit.
+
+        The shipped science.yaml already lists meropenem, so the test first
+        removes it from the copied config and proves the removal by loading
+        it (config must come back imipenem-only). It then applies the
+        documented one-line addition to that copy and asserts the file text
+        changed before loading. Without those two guards the test loads the
+        shipped config and asserts what is already true - a pass for the
+        wrong reason, which is worse than a failure.
+        """
         _copy_config(pipeline_root, tmp_path)
         config_path = tmp_path / "config" / "science.yaml"
-        text = config_path.read_text().replace(
-            "antibiotics:\n  - imipenem", "antibiotics:\n  - imipenem\n  - meropenem"
+        anchor = "antibiotics:\n  - imipenem"
+
+        shipped = config_path.read_text()
+        assert anchor in shipped, (
+            "science.yaml no longer carries the literal `antibiotics:\\n  - "
+            "imipenem` anchor; this test edits that exact text"
         )
-        config_path.write_text(text)
+
+        disabled_text = shipped.replace(anchor + "\n  - meropenem", anchor)
+        assert disabled_text != shipped, (
+            "removing meropenem did not change the copied config, so the "
+            "rest of this test would assert against the shipped file"
+        )
+        config_path.write_text(disabled_text)
+        disabled = load_config(config_path, machine=None)
+        assert disabled.antibiotics == ("imipenem",)
+        assert "meropenem" not in disabled.antibiotics
+
+        # The documented edit: add one line, change no code.
+        enabled_text = disabled_text.replace(anchor, anchor + "\n  - meropenem")
+        assert enabled_text != disabled_text, (
+            "the documented edit was a no-op on the copy: the anchor no "
+            "longer matches the text this test just wrote"
+        )
+        config_path.write_text(enabled_text)
         config = load_config(config_path, machine=None)
-        assert "meropenem" in config.antibiotics
+        assert config.antibiotics == ("imipenem", "meropenem")
         assert config.require_antibiotic("meropenem") == "meropenem"
+        # "No code change" also means the knowledge tables need no edit:
+        # oprD's antibiotic column already names meropenem.
+        assert config.mechanism_for_gene("oprD").relevant_to("meropenem")
 
     def test_antibiotic_column_accepts_a_list(self, config):
         """One knowledge row can cover several antibiotics."""
@@ -657,7 +709,13 @@ def _set_antibiotic(path: Path, gene: str, value: str) -> None:
 
 def _append_antibiotic_to_yaml(target_root: Path) -> None:
     path = target_root / "config" / "science.yaml"
-    text = path.read_text().replace(
+    text = path.read_text()
+    appended = text.replace(
         "antibiotics:\n  - imipenem", "antibiotics:\n  - imipenem\n  - vancomycin"
     )
-    path.write_text(text)
+    assert appended != text, (
+        "the `antibiotics:\\n  - imipenem` anchor no longer matches "
+        "science.yaml; appending vancomycin would be a silent no-op and the "
+        "caller's expected ConfigError would never fire"
+    )
+    path.write_text(appended)

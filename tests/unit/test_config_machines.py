@@ -363,5 +363,9 @@ def test_an_overlay_with_no_resources_is_rejected():
 
 def test_the_repository_configuration_loads_cleanly():
     config = load_config(SCIENCE, machine="laptop")
-    assert config.antibiotics == ("imipenem",)
+    # Both antibiotics the meropenem GWAS build enables; the old assertion
+    # `== ("imipenem",)` encoded the pre-build state. imipenem stays first:
+    # config.antibiotics[0] is the documented fallback.
+    assert config.antibiotics == ("imipenem", "meropenem")
+    assert config.antibiotics[0] == "imipenem"
     assert config.raw["organism"]["taxid"] == 287
