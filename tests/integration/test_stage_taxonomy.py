@@ -179,6 +179,60 @@ class TestUnbuiltStagesAreHonest:
         assert not leaked, f"a refused stage left output behind: {leaked}"
 
 
+class TestTheGwasPrerequisiteOnStageTen:
+    """The one registry edit `gwas-engine` recommended (registry notes §2.4).
+
+    Stage 12's REAL path additionally consumes stage 10's `similarity.tsv`:
+    `--lineage` *requires* `--distances` (pyseer `__main__.py:220`) and the
+    committed config turns lineage confounding on, so a matrix is on the
+    command line of every real run. An edge that does not name `similarity`
+    would let `--skip similarity --only gwas` reach pyseer with no matrix to
+    hand it - and that refusal would come from the adapter's argument
+    validation, after every upstream stage had already been paid for.
+
+    Deleting the edge must be red. `test_every_declared_edge_refuses_when_its_
+    upstream_is_skipped` in `test_no_silent_skips.py` is derived from
+    `PREREQUISITES`, so it gains this pair the moment the edge exists; the
+    tests below pin *why* it exists rather than only that it does.
+    """
+
+    def test_similarity_is_a_declared_prerequisite_of_gwas(self):
+        assert "similarity" in PREREQUISITES["gwas"], (
+            "stage 12's real path reads stage 10's matrix; the edge must say so "
+            f"(gwas prerequisites: {sorted(PREREQUISITES['gwas'])})"
+        )
+
+    def test_the_edge_names_the_file_the_adapter_opens(self, config):
+        """The dependency names a file, so it must be *that* file.
+
+        The adapter reads the filename out of the stage contract rather than
+        retyping it (a second copy of the name is free to drift from the
+        first), and the prerequisite has to agree with it for the same reason.
+        """
+        from papipeline.gwas_real.adapter import STAGE10_DISTANCES_FILENAME
+
+        assert STAGE10_DISTANCES_FILENAME == STAGE_TABLES["similarity"][0], (
+            "the adapter's distances filename has drifted from the contract "
+            "stage 10 writes"
+        )
+
+    def test_the_edge_is_load_bearing_on_the_committed_config(self, config):
+        """`--lineage` is on by default, so the matrix is not an optional input.
+
+        With `gwas_real.lineage: false` the edge would still be *true* (the
+        adapter can be configured to need it) but no default run would need it.
+        This test says which of the two the committed config is.
+        """
+        from papipeline.gwas_real.settings import AdapterSettings
+
+        settings = AdapterSettings.from_config(config)
+        assert settings.lineage is True, (
+            "gwas_real.lineage is off in config/science.yaml, so stage 12's "
+            "default path no longer needs stage 10's matrix. Revisit the "
+            "prerequisite - and the adapter tests - if that was deliberate."
+        )
+
+
 class TestSpecEdgesAreDeclared:
     """The edges spec.md requires, asserted one by one.
 

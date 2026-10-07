@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .config.loader import PipelineConfig
 from .errors import ConfigError, PipelineError
@@ -108,6 +108,30 @@ class CohortGateReport:
             f"cohort={self.n_in_cohort} policy={self.intermediate_policy} "
             f"min_resistant={self.min_resistant}"
         )
+
+    def as_record(self, *, enforced: bool) -> Dict[str, Any]:
+        """The counts as a JSON-safe record for the run result and manifest.
+
+        ``enforced`` is not derivable from the counts - it says which mode
+        took this gate - and a reader of ``run_manifest.json`` needs it to
+        tell a gated run from a soft one. Everything else is a straight read
+        of the fields, so the manifest and the result cannot disagree.
+        """
+        return {
+            "status": "evaluated",
+            "antibiotic": self.antibiotic,
+            "intermediate_policy": self.intermediate_policy,
+            "min_resistant": self.min_resistant,
+            "n_tested": self.n_tested,
+            "n_with_assembly": self.n_with_assembly,
+            "n_no_assembly": self.n_no_assembly,
+            "n_resistant": self.n_resistant,
+            "n_intermediate": self.n_intermediate,
+            "n_susceptible": self.n_susceptible,
+            "n_in_cohort": self.n_in_cohort,
+            "cohort_sample_ids": list(self.cohort_sample_ids),
+            "enforced": bool(enforced),
+        }
 
 
 def _read_gate_settings(
@@ -217,6 +241,7 @@ def evaluate_cohort_gate(
     manifest_ids: Sequence[str],
     phenotype_dir: Path,
     antibiotic: str,
+    enforce: bool = True,
 ) -> CohortGateReport:
     """Join assemblies to S/I/R calls, report the counts, enforce the gate.
 
@@ -225,6 +250,17 @@ def evaluate_cohort_gate(
         manifest_ids: Sample identifiers of the assemblies, in manifest order.
         phenotype_dir: Directory holding ``<antibiotic>_phenotype.tsv``.
         antibiotic: Which antibiotic to gate on. Must be configured.
+        enforce: Whether ``cohort_gate.min_resistant`` refuses the run. The
+            default, ``True``, is the gate doing its job: below the floor the
+            scan is underpowered and the refusal names the key. The run
+            entrypoint passes ``False`` for TEST, where the committed fixtures
+            carry fewer resistant isolates than the floor by construction and
+            their numbers are never reported as findings - so the counts are
+            still taken, and only the refusal is withheld. Real-mode runs pass
+            the default. ``enforce=False`` never suppresses a ``ConfigError``,
+            a join failure or a missing table: those are about the data being
+            wrong, not about the cohort being small, and no mode tolerates
+            them.
 
     Returns:
         The five counts (n tested, n with assembly, n R, n I, n S) plus the
@@ -239,7 +275,8 @@ def evaluate_cohort_gate(
         DataContractError: The directional join failed - a manifest genome
             with zero or two phenotype rows, or a duplicate row.
         CohortGateError: Resistant isolates fall below
-            ``cohort_gate.min_resistant``; the message names the key.
+            ``cohort_gate.min_resistant``; the message names the key. Raised
+            only when ``enforce`` is true.
     """
     config.require_antibiotic(antibiotic)
     policy, min_resistant = _read_gate_settings(config)
@@ -271,16 +308,29 @@ def evaluate_cohort_gate(
     )
 
     if n_resistant < min_resistant:
-        raise CohortGateError(
-            f"Cohort gate refused for {antibiotic}: {n_resistant} resistant "
-            f"isolate(s) with an assembly, below the minimum of "
-            f"{min_resistant}. The threshold is `{MIN_RESISTANT_CONFIG_KEY}` "
-            "in the science configuration (config/science.yaml); raise it "
-            "only for a deliberately small run, or enlarge the cohort.",
-            antibiotic=antibiotic,
-            n_resistant=n_resistant,
-            min_resistant=min_resistant,
-            config_key=MIN_RESISTANT_CONFIG_KEY,
+        if enforce:
+            raise CohortGateError(
+                f"Cohort gate refused for {antibiotic}: {n_resistant} resistant "
+                f"isolate(s) with an assembly, below the minimum of "
+                f"{min_resistant}. The threshold is `{MIN_RESISTANT_CONFIG_KEY}` "
+                "in the science configuration (config/science.yaml); raise it "
+                "only for a deliberately small run, or enlarge the cohort.",
+                antibiotic=antibiotic,
+                n_resistant=n_resistant,
+                min_resistant=min_resistant,
+                config_key=MIN_RESISTANT_CONFIG_KEY,
+            )
+        # Not suppressed, not silent: the floor is still reported as unmet, so
+        # a log of a non-enforcing run reads the same as the refusal it would
+        # have been - just without stopping. The counts below carry both
+        # numbers too, so the manifest says the same thing.
+        LOGGER.warning(
+            "Cohort gate below the minimum for %s: %d resistant isolate(s) "
+            "with an assembly, below %d (%s) - not enforced in this run mode",
+            antibiotic,
+            n_resistant,
+            min_resistant,
+            MIN_RESISTANT_CONFIG_KEY,
         )
 
     report = CohortGateReport(

@@ -550,8 +550,10 @@ convergence:
 # Post-scan analyses: papipeline/downstream/. The positive-control gate, the
 # conditional and stratified scans, the interaction tiers, the lineage
 # meta-analysis, the novelty filter and the evidence tiers all read this
-# block. None of it is wired into a stage yet; see
-# .build/downstream-stats.registry-notes.md.
+# block. Wired from run.py's `convergence` branch in REAL mode only - see
+# papipeline/downstream/runner.py for why (the committed TEST fixtures cannot
+# satisfy positive_controls, measured) and
+# tests/integration/test_downstream_wiring.py for the tests that pin it.
 downstream:
   # Controls the baseline association table must recover before any downstream
   # analysis - and before a report - may run. `oprD_burden` is recovered only

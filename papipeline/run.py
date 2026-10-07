@@ -40,11 +40,14 @@ from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Set,
 
 from . import __version__
 from .adapters import UNPROBED_VERSION, detect_all, probe_on_demand
+from .cohort_gate import evaluate_cohort_gate
+from .downstream.runner import run_downstream_analyses
 from .execution.contracts import internal_table_path, table_path
 from .config.loader import PipelineConfig, load_config
 from .errors import ModeNotAllowedError, PipelineError, StageError
 from .io.tsv import read_tsv, write_tsv
 from .knowledge import efflux_regulator_genes
+from .layers import encode_layers
 from .logging_utils import configure_logging, get_logger
 from . import reference, stub
 from .adapters.bakta import genome_stem_for
@@ -230,7 +233,15 @@ PREREQUISITES: Mapping[str, FrozenSet[str]] = {
     "cohort_variants": frozenset({"variants"}),
     "recombination": frozenset({"pangenome"}),
     "similarity": frozenset({"phylogeny"}),
-    "gwas": frozenset({"phenotype", "variants", "pangenome"}),
+    # `similarity` (stage 10) added on integration: the REAL path reads
+    # stage 10's matrix as pyseer's `--distances`, and `--lineage` *requires*
+    # `--distances` (pyseer `__main__.py:220`) with `gwas_real.lineage: true`
+    # committed in config/science.yaml. Naming `similarity` rather than
+    # `phylogeny` is the honest dependency: the adapter takes the filename from
+    # `STAGE_TABLES["similarity"][0]` rather than retyping it, so the file this
+    # edge names is the file it opens. Side effect: `--only gwas` now schedules
+    # stage 10 too; full runs are unaffected (`reporting` requires both).
+    "gwas": frozenset({"phenotype", "variants", "pangenome", "similarity"}),
     "convergence": frozenset({"amr", "phylogeny"}),
     "cooccurrence": frozenset({"amr", "variants", "annotation"}),
     "phylogeny": frozenset({"recombination"}),
@@ -281,6 +292,14 @@ class RunResult:
     #: when the run is not against a reference. Recorded so the manifest
     #: states which genome the coordinates are about.
     reference: Optional[Mapping[str, Any]] = None
+    #: What the cohort gate counted before any stage ran, or None if the gate
+    #: was never reached. A mapping rather than the report object so the run
+    #: result and `run_manifest.json` carry the same JSON-safe record - see
+    #: `CohortGateReport.as_record`. `None` only if the run died before the
+    #: gate; a gate that did not evaluate records `status: not_evaluated`
+    #: with the reason, because an absent key reads as "it ran and found
+    #: nothing".
+    cohort_gate: Optional[Dict[str, Any]] = None
 
     @property
     def n_samples(self) -> int:
@@ -906,7 +925,16 @@ def run_pipeline(
         # STUB must work with no reference on disk at all.
         reference_record = reference.verify_reference(config, resolved)
 
-    if not data_root.exists():
+    if resolved is not RunMode.STUB and not data_root.exists():
+        # The directory a real or synthetic cohort is *read from*, checked before
+        # any stage runs so a missing one fails loudly rather than as an empty
+        # cohort over nothing.
+        #
+        # STUB is excluded deliberately, for the reason the reference check
+        # above is: spec.md D8 - a stub run discovers no manifest, reads no
+        # fixture and needs no genome, so requiring a directory it never opens
+        # would make the mode depend on exactly the files it exists to avoid
+        # needing (and fail every STUB run on a machine without `data/`).
         raise PipelineError(
             "Data root for this mode does not exist",
             mode=resolved.value,
@@ -954,8 +982,60 @@ def run_pipeline(
     # `capped_sample_count`; the cap itself is unchanged.
     config.enforce_sample_cap(capped_sample_count(config, manifest))
 
+    # The cohort join and size gate (papipeline/cohort_gate.py), evaluated here
+    # rather than inside stage 1: `config/science.yaml` says it is "assessed
+    # before any analysis stage runs", and the ordering argument is the sample
+    # cap's - a cohort with too few resistant isolates is a refusal the user
+    # should learn about before hours of annotation, not after.
+    #
+    # It is not a stage and gets no stage number (spec.md:351-style fold: it
+    # writes no contract table), so it records on the run result and in
+    # `run_manifest.json` instead of `outputs`.
+    #
+    # Three outcomes, and the distinction between "did not evaluate" and
+    # "evaluated and found nothing" is the whole point of the `status` key:
+    #
+    # * STUB reads no cohort at all (spec.md D8), so it records why it could
+    #   not count rather than a count it never took;
+    # * a schedule without phenotype has nothing to gate on;
+    # * otherwise the counts are taken, and the floor refuses only in REAL -
+    #   `enforce` below. TEST's committed fixtures sit under the floor by
+    #   construction (7 R of 20, floor 100), so enforcing there would either
+    #   stop every synthetic run or push the floor down to fit a fixture,
+    #   which is tuning configuration to make a test pass. REAL's numbers are
+    #   the ones reported as findings, so REAL's are the ones that refuse.
+    if resolved is RunMode.STUB:
+        cohort_gate_record: Optional[Dict[str, Any]] = {
+            "status": "not_evaluated",
+            "reason": (
+                "STUB reads no cohort: no manifest, no phenotype table and no "
+                "fixture, so there are no R/I/S counts to take (spec.md D8)"
+            ),
+        }
+    elif "phenotype" not in effective:
+        cohort_gate_record = {
+            "status": "not_evaluated",
+            "reason": "phenotype is not scheduled for this run, so there is "
+                      "nothing to gate on",
+        }
+    elif (phenotype_skip := skip_reason("phenotype")) is not None:
+        cohort_gate_record = {
+            "status": "not_evaluated",
+            "reason": f"phenotype will not run: {phenotype_skip}",
+        }
+    else:
+        _enforced = resolved is RunMode.REAL
+        cohort_gate_record = evaluate_cohort_gate(
+            config,
+            manifest_ids=manifest.sample_ids,
+            phenotype_dir=config.phenotype_dir(resolved),
+            antibiotic=antibiotic,
+            enforce=_enforced,
+        ).as_record(enforced=_enforced)
+
     result = RunResult(
-        mode=resolved, antibiotic=antibiotic, manifest=manifest, outputs=outputs
+        mode=resolved, antibiotic=antibiotic, manifest=manifest, outputs=outputs,
+        cohort_gate=cohort_gate_record,
     )
     result.reference = reference_record
     result.warnings = warnings
@@ -1422,6 +1502,41 @@ def run_pipeline(
                             config, manifest, resolved, tool_output_root
                         ),
                     )
+                # The layer feature tables - stage 12's second feature input,
+                # and the second of the five packages this integration pass
+                # found built but called by nothing. Built HERE for the same
+                # ordering reason as `gwas_features` above: every table it
+                # reads (stage 4's determinant table, stage 6's regulator
+                # table, stage 7's structural calls) is written by a stage
+                # that runs before stage 7, and stage 12 is where the feature
+                # input is assembled.
+                #
+                # REAL and TEST run it; STUB never does, for the reason the
+                # branch above gives: STUB runs no parser, and `encode_layers`
+                # reads four stage-input tables plus a phenotype table, none
+                # of which a stub run has. (`layers` is not a stage and has no
+                # stage number - spec.md:351 folds the feature step into the
+                # stage that owns it - so nothing here appears in
+                # `STAGE_TABLES`, and the contract validator never sees it.)
+                #
+                # `input_root` is `tool_output_root`, in TEST
+                # `test_data/intermediate`, where the four source tables are
+                # committed fixtures. `output_dir` is the run's own
+                # `intermediate/stages/layers`, NOT `tool_output_root`: the
+                # fixtures are read-only, and writing an eight-file directory
+                # into the tree the next run reads from would dirty a
+                # byte-stable tree (docs/reproducibility.md) and feed the next
+                # run's inputs from this run's output.
+                if resolved is not RunMode.STUB:
+                    layers = encode_layers(
+                        config,
+                        manifest,
+                        mode=resolved,
+                        input_root=tool_output_root,
+                        output_dir=stage_dir / "layers",
+                        phenotype_dir=config.phenotype_dir(resolved),
+                    )
+                    record("layers", layers.paths["matrix"])
                 mark("pangenome")
 
             elif stage == "recombination":
@@ -1635,6 +1750,52 @@ def run_pipeline(
                     ),
                 )
                 mark("convergence")
+
+                # The seven post-scan steps - gate, conditional, stratified,
+                # interactions, lineage meta, evidence, report - in the order
+                # `.build/downstream-stats.registry-notes.md` section 1
+                # prescribes. Called from HERE rather than from the `gwas`
+                # branch because step 6 grades a feature's independent-lineage
+                # count with stage 13's convergence call as the authority when
+                # there is one, and stage 13 runs after stage 12.
+                #
+                # REAL only, and the reason is measured rather than assumed: on
+                # the committed TEST fixtures stage 12 yields no MBL feature at
+                # all and `gene__oprD_LoF` at adjusted p = 0.901, so
+                # `run_control_gate` refuses with BOTH configured controls
+                # missing - pinned by
+                # `tests/integration/test_downstream_wiring.py::TestTheGateIsFirst`.
+                # The gate is step 1 and `build_report` re-runs it internally
+                # with no switch to disable it, so wiring these steps into TEST
+                # would fail every TEST run; and emptying
+                # `downstream.positive_controls` to fit synthetic data is
+                # tuning configuration to make a test pass - exactly what the
+                # cohort gate declined to do a hundred lines above. STUB is
+                # excluded for the reason it always was: it fabricates declared
+                # outputs and reads nothing.
+                #
+                # So a TEST run records no downstream artefact, and that is
+                # asserted rather than assumed (the same test file).
+                if (
+                    resolved is RunMode.REAL
+                    and gwas_results
+                    and gwas_input is not None
+                ):
+                    downstream = run_downstream_analyses(
+                        config,
+                        gwas_results=gwas_results,
+                        gwas_input=gwas_input,
+                        # Keyed by determinant, which is the only join the
+                        # evidence step offers: a call whose determinant equals
+                        # the feature's name is the same determinant under a
+                        # different label, and a feature with no call falls
+                        # back to its own lineage distribution.
+                        convergence={
+                            call.determinant: call for call in convergence_calls
+                        },
+                        output_dir=reports_root,
+                    )
+                    record("downstream_evidence", downstream.evidence_path)
 
             elif stage == "cooccurrence":
                 # spec.md:351 - `mechanisms` is an internal step of
@@ -1858,6 +2019,7 @@ def run_pipeline(
         tools=tools,
         provenance=provenance,
         skipped=skipped_reasons,
+        cohort_gate=cohort_gate_record,
     )
 
     LOGGER.info(
@@ -3311,6 +3473,7 @@ def _write_run_manifest(
     tools: Mapping[str, Any],
     provenance: Sequence[Mapping[str, Any]],
     skipped: Optional[Mapping[str, str]] = None,
+    cohort_gate: Optional[Mapping[str, Any]] = None,
 ) -> Path:
     """Write ``run_manifest.json``: the reproducibility record for the run.
 
@@ -3341,6 +3504,10 @@ def _write_run_manifest(
     The union is over stages **some invocation completed**, so it can never
     contain a stage that did not run. That is the invariant: the manifest does
     not invent a completion, it stops forgetting one.
+
+    ``cohort_gate`` follows the same union rule, and carries the gate's counts
+    (or its ``not_evaluated`` verdict and reason) - see the note where the
+    payload is assembled.
     """
     path = Path(results_root) / "run_manifest.json"
     previous = _read_previous_manifest(path, mode)
@@ -3367,6 +3534,22 @@ def _write_run_manifest(
     }
     outputs_map.update({str(k): str(v) for k, v in outputs.items()})
 
+    # The cohort gate, unioned like `stages` and for the same reason: every
+    # Snakefile rule is a separate process (workflow/Snakefile's documented
+    # KNOWN LIMITATION), and only the invocations whose schedule includes
+    # phenotype evaluate the gate at all. An invocation that did not evaluate
+    # it must not erase the one that did - but a "not evaluated" record must
+    # not overwrite a real one either, which is why an unevaluated gate only
+    # lands when the manifest has none. An evaluated record always lands: it
+    # is this run's own count, taken from this run's own manifest.
+    gate_record: Dict[str, Any] = {
+        str(k): v for k, v in (previous.get("cohort_gate") or {}).items()
+    }
+    if cohort_gate is not None:
+        incoming = dict(cohort_gate)
+        if incoming.get("status") == "evaluated" or not gate_record:
+            gate_record.update(incoming)
+
     payload = {
         "pipeline_version": __version__,
         "run_mode": mode.value,
@@ -3381,6 +3564,13 @@ def _write_run_manifest(
         "stages_completed_this_run": completed_now,
         "stages_skipped": skipped_map,
         "outputs": outputs_map,
+        # The gate's five counts, taken before any stage ran, plus `enforced`
+        # (whether `cohort_gate.min_resistant` could refuse in this mode) and
+        # `status` (`evaluated` | `not_evaluated` with the reason). Absent
+        # only from a manifest written by a pipeline predating the wiring; an
+        # empty dict is never written in its place, because "no key" and
+        # "evaluated, nothing to say" must not read the same.
+        "cohort_gate": gate_record,
         "tools_detected": {
             name: {
                 "executable": tool.executable,

@@ -335,6 +335,53 @@ class TestModeGating:
         lines = Path(amr).read_text(encoding="utf-8").splitlines()
         assert len(lines) == 1, f"a stub table should be header-only, got {len(lines)} lines"
 
+    def test_a_stub_run_needs_no_assembly_root_on_disk(
+        self, config, tmp_path, monkeypatch
+    ):
+        """spec.md D8: STUB reads nothing, so nothing has to exist.
+
+        The existence check at run entrypoint is about the directory a *real*
+        cohort is read from. Pointing it at STUB - a mode that discovers no
+        manifest, reads no fixture and needs no genome - made a stub run
+        depend on the very files the mode exists to avoid needing: on a
+        machine without `data/`, every STUB run died with
+        "Data root for this mode does not exist" before a single rule ran.
+
+        Pinned with a data root of our own naming rather than the machine's,
+        so the test is red on a developer's box that happens to have `data/`
+        and green on CI that does not.
+        """
+        monkeypatch.setitem(config.paths, "data_root", "no_such_data_root_in_this_repo")
+        assert not config.assembly_root(RunMode.STUB).exists(), (
+            "the point of this test is a data root that is not there"
+        )
+        monkeypatch.setenv("PIPELINE_RESULTS_ROOT", str(tmp_path / "stub-no-data"))
+        result = run_pipeline(config=config, mode="STUB")
+        assert result.mode is RunMode.STUB
+        assert result.outputs, "a stub run must still write its fabricated outputs"
+
+    def test_a_test_run_still_refuses_without_its_data_root(
+        self, config, tmp_path, monkeypatch
+    ):
+        """The check stays for the mode that reads a cohort. Both halves.
+
+        Loosening the guard for STUB must not delete it: a TEST run whose
+        fixtures directory is missing has to fail loudly and early, naming the
+        mode and the path, rather than discover an empty cohort and report a
+        clean run over nothing. A test that only covers the STUB side would
+        pass just as well on a guard that had been removed entirely.
+        """
+        monkeypatch.setitem(config.paths, "test_data_root", "no_such_test_data_root")
+        monkeypatch.setenv("PIPELINE_RESULTS_ROOT", str(tmp_path / "test-no-data"))
+        with pytest.raises(PipelineError) as caught:
+            run_pipeline(config=config, mode="TEST")
+        message = str(caught.value)
+        assert "Data root" in message, message
+        assert "TEST" in message, f"the refusal must name the mode: {message}"
+        assert "no_such_test_data_root" in message, (
+            f"the refusal must name the path it could not find: {message}"
+        )
+
 
 class TestStageGraph:
     def test_sixteen_stages(self):

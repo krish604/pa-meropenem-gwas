@@ -228,20 +228,27 @@ def test_a_missing_phenotype_row_stops_the_run(tmp_path: Path, monkeypatch):
     A genome with no phenotype row is a hard failure, not a warning: the
     pipeline cannot know which cohort was meant, and carrying the sample as
     silently-missing is how a GWAS ends up on a different set than the report
-    describes. This is `papipeline.join`'s contract, and before it was wired
-    the run only warned and continued.
+    describes. This is `papipeline.join`'s contract.
+
+    The refusal now comes from the cohort gate, which runs that same join
+    before any stage (`config/science.yaml`: the gate is "assessed before any
+    analysis stage runs"). It therefore arrives as the join's own
+    `DataContractError` rather than as a `StageError` wrapped around stage 11
+    - the type this test asserted when the join only happened inside the
+    stage. The assertion is stronger than the one it replaces: it pins not
+    just that the run refused and named the sample, but that it refused
+    *before a single stage wrote a table*, which is the property the earlier
+    refusal could not claim.
     """
     from papipeline.config.loader import load_config
-    from papipeline.errors import StageError
+    from papipeline.errors import DataContractError
     from papipeline.run import run_pipeline
 
     root = _test_root_with_phenotype_gap(tmp_path)
     monkeypatch.setenv(RESULTS_ROOT_ENV, str(tmp_path / "gap-results"))
     config = load_config(root / "config" / "science.yaml")
 
-    # run.py wraps a stage failure in StageError and preserves the detail, so
-    # the operator sees why, not just which stage died.
-    with pytest.raises(StageError) as excinfo:
+    with pytest.raises(DataContractError) as excinfo:
         run_pipeline(config=config, mode="TEST")
 
     message = str(excinfo.value)
@@ -250,6 +257,14 @@ def test_a_missing_phenotype_row_stops_the_run(tmp_path: Path, monkeypatch):
     )
     assert "phenotype row" in message, (
         f"the failure should say what is wrong, got: {message}"
+    )
+
+    # The ordering half: nothing was written before the refusal fired. A
+    # refusal that arrives after stage 1 has already paid for the cohort is
+    # the same ordering mistake as the sample cap the gate now sits beside.
+    stages = tmp_path / "gap-results" / "test" / "intermediate" / "stages"
+    assert not stages.exists() or not any(stages.iterdir()), (
+        "a stage ran before the missing phenotype row was refused"
     )
 
 

@@ -26,6 +26,9 @@ What each submodule is for:
                                  deliverable 6: the table a reader sees
 :mod:`~papipeline.downstream.logit`
                                  the shared binary-outcome fits
+:mod:`~papipeline.downstream.runner`
+                                 the entry point that runs the seven steps in
+                                 order and writes the evidence table
 ===============================  =========================================
 
 Two rules the whole package obeys. Claim levels come from
@@ -34,8 +37,10 @@ reach for. And every fitted model is stamped ``:NO_KINSHIP_CORRECTION``, the
 same stamp :class:`papipeline.stages.gwas.ReferenceEngine` uses, because
 nothing here corrects for population structure either.
 
-None of this is wired into a stage yet; see
-``.build/downstream-stats.registry-notes.md``.
+Wired from ``papipeline/run.py``, in REAL mode only; :mod:`...runner` says why
+and ``tests/integration/test_downstream_wiring.py`` pins it. The registry notes
+at ``.build/downstream-stats.registry-notes.md`` are the history of the
+package before that wiring.
 """
 
 from __future__ import annotations
@@ -49,4 +54,5 @@ __all__ = [
     "lineage_meta",
     "logit",
     "report",
+    "runner",
 ]

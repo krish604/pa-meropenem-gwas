@@ -416,6 +416,36 @@ so. Stage 6 is `variants` and is a different thing.
 `database`, `database_version`, `version_status`
 (`pinned`/`unpinned`/`na`), `source`, `notes`
 
+**`known_determinants.tsv`** — `determinant` (unique), `kind`, `mechanism`,
+`mechanism_class`, `claim_ceiling`, `members`, `source`
+
+- **Derived, not edited.** Regenerated from `mechanisms.tsv` by
+  `papipeline.downstream.known_determinants.write_known_determinants(config)`;
+  `tests/unit/test_downstream_config_tables.py` fails if the committed file
+  drifts from the derivation. `source` names the row it came from per row.
+- Read by `read_known_determinants` with `required_columns=COLUMNS` and
+  `unique_columns=("determinant",)`, so a missing column or a duplicate
+  determinant is a typed refusal rather than a silent partial table.
+- This is what "already known" means for the positive-control gate, the
+  conditional/stratified covariates and the novelty filter. `kind` decides
+  whether detecting a bare determinant counts as recovery (`gene`, `composite`,
+  `family`) or whether only a feature *of that state* does (a stem, such as
+  `oprD`).
+
+**`interaction_pairs.tsv`** — `tier`, `antibiotic`, `feature_a`, `feature_b`,
+`notes` (all five required by the reader; the first four used for the joins)
+
+- `tier` is an integer; **tier 3 is refused at load time**, named, not skipped
+  (it is skipped by design, and a tier-3 row is an instruction nobody gave).
+- `feature_a`/`feature_b` must resolve against `known_determinants.tsv` or the
+  two declared layer composites (`PDC_high`, `oprD_off_any`); an endpoint that
+  resolves to nothing is refused by name.
+- `antibiotic` is a comma-separated list — a pair runs only when it is relevant
+  to the run's own drug (the run resolves that as
+  `stages.gwas_features.target_antibiotic`).
+- Only `tier = 1` lives in this file. Tier 2 is constructed per run as
+  known × novel, capped by `downstream.tier2_max_pairs` in `science.yaml`.
+
 ## Output files
 
 Written under `results/<mode>/intermediate/stages/`.
@@ -557,6 +587,51 @@ including the fixed marker `detection_is_not_resistance`.
 A candidate structural variant appears in `structural_variant` with the prefix
 `candidate:` and drives `confidence` to `PREDICTED`. It is never presented as
 confirmed.
+
+### The downstream evidence table: `reports/downstream_evidence.tsv`
+
+Written by `papipeline.downstream.runner.run_downstream_analyses`, which
+`run.py` calls from its `convergence` branch — **REAL mode only**. This is the
+one output in this file that does *not* live under
+`results/<mode>/intermediate/stages/`: it is not a stage artefact, has no stage
+number (`spec.md:351` folds no such step into any stage), and sits beside the
+pipeline report. The path is resolved from `config.reports_root(mode)`.
+
+Grain: **one row per feature graded by either scan** — the union of the baseline
+(stage 12) and conditional scans, baseline order first.
+
+Columns, in order (`papipeline.downstream.report.REPORT_COLUMNS`):
+
+```
+feature, novelty, evidence_tier, claim_status, basis,
+conditional_adjusted_p, baseline_adjusted_p, independent_lineages, known_matches
+```
+
+- `claim_status` is a member of `ClaimStatus` — `DETECTED`, `PREDICTED`,
+  `ASSOCIATED`, `SUPPORTED`, `UNKNOWN` — and **never `CAUSAL`**; `build_report`
+  refuses anything else.
+- `evidence_tier` is `A`–`D`. A feature no scan tested grades `D` / `UNKNOWN`
+  rather than borrowing a p-value from anywhere; a missing adjusted p is not
+  significance.
+- `independent_lineages` is stage 13's count when it classified that
+  determinant, otherwise the count derived from the feature's own lineage
+  distribution, excluding `unknown`.
+- `known_matches` is a `;`-separated list (`write_tsv` joins sequences).
+- Written through `write_tsv`, so `read_tsv` with `REPORT_COLUMNS` round-trips
+  it; `tests/integration/test_downstream_wiring.py` reads it back.
+
+**Not written, by design:** the tier-1, tier-2 and meta-analysis sections
+travel on the `DownstreamReport` object. They have their own tables and no
+column order has been fixed for them; emitting them would be a format decision,
+not a wiring one. That gap is recorded in
+`.build/downstream-stats.registry-notes.md` §6.
+
+**Gated:** the file is written only if the positive-control gate recovered every
+control in `downstream.positive_controls`, and the gate runs before any of the
+seven steps. On the committed TEST fixtures the gate cannot pass (no MBL
+feature exists in that cohort and `gene__oprD_LoF` is at adjusted p = 0.901),
+which is why the wiring is REAL-only — the measurement is pinned by
+`tests/integration/test_downstream_wiring.py::TestTheGateIsFirst`.
 
 ## Adding a data contract change
 

@@ -164,18 +164,35 @@ def internal_table_path(stage_dir: Path, name: str) -> Path:
         ) from None
     return Path(stage_dir) / filename
 
-#: Stages whose table is *nominally* one row per sample, and for which a
-#: caller may therefore opt into a coverage check.
+#: Tables whose rows are drawn from the manifest's samples, so a caller may opt
+#: into a coverage check over them.
 #:
-#: This is not a claim that coverage holds. Several of these are
+#: **Dense is a claim about coverage, not about row count.** The check this
+#: gates is `covers_samples`, which counts *distinct* `sample_id` values
+#: (`CheckKind.SAMPLE_COUNT`), so a table with three rows for one sample still
+#: covers that sample exactly once. Several members are multi-row per sample by
+#: their own contract: `docs/data_contract.md` gives `05_mechanisms.tsv` one
+#: row per mechanism call and `08_virulence.tsv` one row per virulence
+#: detection. What every member shares is that a row's `sample_id` is a
+#: manifest sample and every sample is expected to appear at least once.
+#:
+#: It is not a claim that coverage *holds*. Several of these are
 #: presence-dependent in practice - a sample with no antimicrobial
 #: determinant, no regulator variant, no structural variant and no virulence
 #: factor produces no row at all, because absence is a finding rather than a
 #: missing record. Coverage is therefore never asserted by default; see the
 #: note in :func:`stage_spec`.
+#:
+#: Keyed by declared table, never by module name: a member has to resolve
+#: through :func:`table_path` or :func:`internal_table_path`. `integration`
+#: was entered under its module name while every other folded step was
+#: entered under the file it writes, so the one genuinely one-row-per-sample
+#: joined table (`15_master_table.tsv`) was missing from the set that means
+#: per-sample; spec.md:351 folded the step into `reporting`, and the key
+#: followed it to `master_table`.
 DENSE_PER_SAMPLE_STAGES = frozenset({
     "validation", "annotation", "mlst", "mechanisms", "virulence",
-    "phenotype", "integration",
+    "phenotype", "master_table",
 })
 
 #: Kept for callers that want the coarser "has a sample_id column" notion.
