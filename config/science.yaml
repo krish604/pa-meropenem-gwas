@@ -547,6 +547,33 @@ convergence:
   rare_max_samples: 2
   minimum_branch_support: 0.0
 
+# Post-scan analyses: papipeline/downstream/. The positive-control gate, the
+# conditional and stratified scans, the interaction tiers, the lineage
+# meta-analysis, the novelty filter and the evidence tiers all read this
+# block. None of it is wired into a stage yet; see
+# .build/downstream-stats.registry-notes.md.
+downstream:
+  # Controls the baseline association table must recover before any downstream
+  # analysis - and before a report - may run. `oprD_burden` is recovered only
+  # by OprD-loss features (detecting an intact oprD is not detecting its loss);
+  # `any_MBL` is recovered by any of its member genes. A control that is
+  # absent from the table, or present but not significant at
+  # gwas.significance_threshold, is named in the failure.
+  #
+  # An empty list is refused rather than obeyed: a gate that checks nothing
+  # passes vacuously.
+  positive_controls:
+    - oprD_burden
+    - any_MBL
+  # Extra columns held fixed in the conditional scan, on top of the known layer
+  # features that are always held fixed. A column named here but absent from
+  # the feature matrix is a refusal, not a silent no-op.
+  covariates: []
+  # Ceiling on the tier-2 anchored scan (every known column x every novel
+  # column). The scan refuses, naming this key, rather than truncating the pair
+  # list - a run must not quietly analyse a fraction of the pairs it meant to.
+  tier2_max_pairs: 1000
+
 cooccurrence:
   tests:
     - genes

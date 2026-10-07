@@ -1,0 +1,26 @@
+# Derived from config/mechanisms.tsv - do not edit by hand.
+# Regenerate with papipeline.downstream.known_determinants.write_known_determinants(config); tests/unit/test_downstream_config_tables.py fails if this file drifts.
+determinant	kind	mechanism	mechanism_class	claim_ceiling	members	source
+oprD	gene	reduced_permeability	reduced_permeability	DETECTED	.	config/mechanisms.tsv
+mexR	gene	efflux	efflux	DETECTED	.	config/mechanisms.tsv
+nalC	gene	efflux	efflux	DETECTED	.	config/mechanisms.tsv
+nalD	gene	efflux	efflux	DETECTED	.	config/mechanisms.tsv
+mexZ	gene	efflux	efflux	DETECTED	.	config/mechanisms.tsv
+nfxB	gene	efflux	efflux	DETECTED	.	config/mechanisms.tsv
+mexT	gene	efflux	efflux	DETECTED	.	config/mechanisms.tsv
+mexS	gene	efflux	efflux	DETECTED	.	config/mechanisms.tsv
+ampD	gene	ampc_regulation	ampc_regulation	DETECTED	.	config/mechanisms.tsv
+ampR	gene	ampc_regulation	ampc_regulation	DETECTED	.	config/mechanisms.tsv
+dacB	gene	ampc_regulation	ampc_regulation	DETECTED	.	config/mechanisms.tsv
+blaOXA-48	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaOXA-23	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaOXA-24/40	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaNDM-1	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaVIM-1	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaIMP-1	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaKPC-2	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaTEM-1	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaCTX-M	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+blaSPM-1	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+aac(6')-Ib-cr	gene	acquired_determinant	acquired_determinant	DETECTED	.	config/mechanisms.tsv
+any_MBL	composite	acquired_determinant	acquired_determinant	DETECTED	blaNDM-1,blaVIM-1,blaIMP-1,blaSPM-1	config/mechanisms.tsv

@@ -1,0 +1,22 @@
+# Tier-1 pre-specified interaction pairs for the downstream scans.
+#
+# Every row is a pair papipeline/downstream/interactions.py has to appear in a
+# tier-1 scan's output, whether or not this run's feature matrix carries both
+# columns (see the module's docstring for what a row says when it does not).
+#
+#   tier     1 = pre-specified (this file); 2 = constructed by the anchored
+#            scan, never written here; 3 is refused at load time - tier 3 is
+#            skipped by design, not silently run.
+#   antibiotic  comma-separated; the pair runs only for a matching endpoint.
+#   feature_a / feature_b  must resolve to a row of config/known_determinants.tsv
+#            or to one of the two layer composites (PDC_high, oprD_off_any);
+#            an endpoint that resolves to nothing is refused by name.
+#   notes    free text.
+#
+# Tier 2 is not listed here: it is generated per run as known x novel, and its
+# ceiling is downstream.tier2_max_pairs in config/science.yaml.
+tier	antibiotic	feature_a	feature_b	notes
+1	imipenem,meropenem	PDC_high	oprD_off_any	OprD loss matters most when PDC is high; pre-specified for the carbapenems
+1	imipenem,meropenem	KPC	oprD_off_any	acquired carbapenemase against an outer-membrane loss; pre-specified for the carbapenems
+1	imipenem,meropenem	nalC	mexR	two regulators of the same MexAB-OprM pump
+1	imipenem,meropenem	mexZ	ampD	two regulators on opposite sides of the resistance phenotype
