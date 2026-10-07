@@ -395,6 +395,38 @@ gwas:
     method: bonferroni
     alpha: 0.05
 
+# The REAL-path pyseer adapter (papipeline/gwas_real/). These are the flags
+# stage 12's real invocation is built from - which variant file pyseer is
+# pointed at, whether lineage enters the model, whether the run is a grouped
+# burden test - and they are scientific choices, so they live here beside the
+# rest of the GWAS science rather than in a machine overlay (test_config_
+# machines forbids overlays declaring a section science owns).
+#
+# Paths are never configured here: the phenotype, variant, kinship and
+# distances files are inputs to a run, and threads come from `runtime` in the
+# machine overlay. An absent section means these defaults, stated once.
+gwas_real:
+  # pyseer's variant group is mutually exclusive and required: exactly one of
+  # kmers, pres or vcf. The pipeline's native feature table is the panaroo
+  # presence/absence (pres) matrix stage 12 already hands pyseer, so a REAL
+  # run without configuration analyses the same features TEST does.
+  variant_source: pres
+  # Report lineage effects. pyseer refuses `--lineage` without `--distances`
+  # (__main__.py:220), so lineage here consumes stage 10's similarity.tsv -
+  # the file pyseer/input.py::load_structure reads with pd.read_table(index_col=0).
+  lineage: true
+  # Grouped burden testing: the VCF regions file, or null for a single-variant
+  # scan. pyseer declares `--burden BURDEN` as a *value* (not a switch) and
+  # refuses it without `--vcf`, which the adapter checks before launching.
+  burden: null
+  # pyseer's headerless covariates file, or null. Must be given together with
+  # `use_covariates` below - a file pyseer loads but uses no column of is a
+  # flag that changes nothing.
+  covariates: null
+  # Which columns of that file enter the model, as pyseer encodes them:
+  # `2` categorical, `2q` quantitative (see pyseer --use-covariates).
+  use_covariates: []
+
 phylogeny:
   aligner: panaroo
   snp_caller: snp_sites
