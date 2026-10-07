@@ -29,24 +29,24 @@
 # that apply to it.
 mechanism	gene	gene_type	antibiotic	biological_role	evidence_level	mechanism_class	gene_role	claim_ceiling	notes
 reduced_permeability	oprD	chromosomal	imipenem,meropenem	Outer-membrane porin; loss reduces carbapenem influx	DETECTED	reduced_permeability	permeability	DETECTED	Presence of oprD indicates an intact locus, not susceptibility. Loss-of-function must come from stage 6 or stage 7. Same locus also affects other carbapenems.
-efflux	mexR	chromosomal	imipenem	Repressor of the mexAB-opmD operon; alteration can de-repress efflux	DETECTED	efflux	efflux_regulator	DETECTED	Direction of effect is context dependent in the literature. Report the variant, not a resistance call.
-efflux	nalC	chromosomal	imipenem	Component of the MexXY/OprM pump machinery	DETECTED	efflux	efflux_regulator	DETECTED	nalC loss-of-function variants are reported. Do not assume gain of resistance from detection alone.
-efflux	nalD	chromosomal	imipenem	Component of the MexXY/OprM pump machinery	DETECTED	efflux	efflux_regulator	DETECTED	Same caveats as nalC.
-efflux	mexZ	chromosomal	imipenem	Repressor of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Promoter and coding variants both relevant; promoter calls gated by config.
-efflux	nfxB	chromosomal	imipenem	Repressor of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Common site ofcarbapenem-associated regulatory variation.
-efflux	mexT	chromosomal	imipenem	Positive regulator of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Usually an IS-associated insertion; see structural_variants stage.
-efflux	mexS	chromosomal	imipenem	Secondary regulator of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Reported as a regulatory variant; direction not assumed.
-ampc_regulation	ampD	chromosomal	imipenem	Peptidoglycan hydrolase that de-represses ampC transcription	DETECTED	ampc_regulation	beta_lactamase_regulator	DETECTED	AmpC overproduction is the classical chromosomal route; this table records the locus, not the phenotype.
-ampc_regulation	ampR	chromosomal	imipenem	Transcriptional regulator of the ampC operon	DETECTED	ampc_regulation	beta_lactamase_regulator	DETECTED	AmpR also senses cell-wall precursors; effect direction is not assumed.
-ampc_regulation	dacB	chromosomal	imipenem	D-alanyl-D-alanine carboxypeptidase; loss can affect cell-wall remodelling	DETECTED	ampc_regulation	beta_lactamase_regulator	DETECTED	Relationship to beta-lactam susceptibility is reported; causality is not claimed.
-acquired_determinant	blaOXA-48	acquired	imipenem	Class D oxacillinase; hydrolyses carbapenems	DETECTED	acquired_determinant	acquired_determinant	DETECTED	Entry means a determinant was detected. It does not establish phenotypic resistance or its magnitude.
-acquired_determinant	blaOXA-23	acquired	imipenem	Class D oxacillinase; hydrolyses carbapenems	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	blaOXA-24/40	acquired	imipenem	Class D oxacillinase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	blaNDM-1	acquired	imipenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	blaVIM-1	acquired	imipenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	blaIMP-1	acquired	imipenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	blaKPC-2	acquired	imipenem	Class A carbapenemase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	blaTEM-1	acquired	imipenem	Class A beta-lactamase; not a carbapenemase on its own	DETECTED	acquired_determinant	acquired_determinant	DETECTED	Must not be presented as a carbapenemase. Combined AmpC/porin status is reported separately.
-acquired_determinant	blaCTX-M	acquired	imipenem	Class A ESBL; not a carbapenemase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	blaSPM-1	acquired	imipenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
-acquired_determinant	aac(6')-Ib-cr	acquired	imipenem	Aminoglycoside-modifying enzyme; listed for co-occurrence context	DETECTED	acquired_determinant	acquired_determinant	DETECTED	Not a beta-lactam determinant. Included so co-occurrence analysis is not biased to beta-lactams.
+efflux	mexR	chromosomal	imipenem,meropenem	Repressor of the mexAB-opmD operon; alteration can de-repress efflux	DETECTED	efflux	efflux_regulator	DETECTED	Direction of effect is context dependent in the literature. Report the variant, not a resistance call.
+efflux	nalC	chromosomal	imipenem,meropenem	Component of the MexXY/OprM pump machinery	DETECTED	efflux	efflux_regulator	DETECTED	nalC loss-of-function variants are reported. Do not assume gain of resistance from detection alone.
+efflux	nalD	chromosomal	imipenem,meropenem	Component of the MexXY/OprM pump machinery	DETECTED	efflux	efflux_regulator	DETECTED	Same caveats as nalC.
+efflux	mexZ	chromosomal	imipenem,meropenem	Repressor of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Promoter and coding variants both relevant; promoter calls gated by config.
+efflux	nfxB	chromosomal	imipenem,meropenem	Repressor of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Common site ofcarbapenem-associated regulatory variation.
+efflux	mexT	chromosomal	imipenem,meropenem	Positive regulator of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Usually an IS-associated insertion; see structural_variants stage.
+efflux	mexS	chromosomal	imipenem,meropenem	Secondary regulator of the mexXY operon	DETECTED	efflux	efflux_regulator	DETECTED	Reported as a regulatory variant; direction not assumed.
+ampc_regulation	ampD	chromosomal	imipenem,meropenem	Peptidoglycan hydrolase that de-represses ampC transcription	DETECTED	ampc_regulation	beta_lactamase_regulator	DETECTED	AmpC overproduction is the classical chromosomal route; this table records the locus, not the phenotype.
+ampc_regulation	ampR	chromosomal	imipenem,meropenem	Transcriptional regulator of the ampC operon	DETECTED	ampc_regulation	beta_lactamase_regulator	DETECTED	AmpR also senses cell-wall precursors; effect direction is not assumed.
+ampc_regulation	dacB	chromosomal	imipenem,meropenem	D-alanyl-D-alanine carboxypeptidase; loss can affect cell-wall remodelling	DETECTED	ampc_regulation	beta_lactamase_regulator	DETECTED	Relationship to beta-lactam susceptibility is reported; causality is not claimed.
+acquired_determinant	blaOXA-48	acquired	imipenem,meropenem	Class D oxacillinase; hydrolyses carbapenems	DETECTED	acquired_determinant	acquired_determinant	DETECTED	Entry means a determinant was detected. It does not establish phenotypic resistance or its magnitude.
+acquired_determinant	blaOXA-23	acquired	imipenem,meropenem	Class D oxacillinase; hydrolyses carbapenems	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	blaOXA-24/40	acquired	imipenem,meropenem	Class D oxacillinase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	blaNDM-1	acquired	imipenem,meropenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	blaVIM-1	acquired	imipenem,meropenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	blaIMP-1	acquired	imipenem,meropenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	blaKPC-2	acquired	imipenem,meropenem	Class A carbapenemase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	blaTEM-1	acquired	imipenem,meropenem	Class A beta-lactamase; not a carbapenemase on its own	DETECTED	acquired_determinant	acquired_determinant	DETECTED	Must not be presented as a carbapenemase. Combined AmpC/porin status is reported separately.
+acquired_determinant	blaCTX-M	acquired	imipenem,meropenem	Class A ESBL; not a carbapenemase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	blaSPM-1	acquired	imipenem,meropenem	Metallo-beta-lactamase	DETECTED	acquired_determinant	acquired_determinant	DETECTED	As above.
+acquired_determinant	aac(6')-Ib-cr	acquired	imipenem,meropenem	Aminoglycoside-modifying enzyme; listed for co-occurrence context	DETECTED	acquired_determinant	acquired_determinant	DETECTED	Not a beta-lactam determinant. Included so co-occurrence analysis is not biased to beta-lactams.

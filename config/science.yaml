@@ -61,7 +61,15 @@ organism:
   expected_gc_percent_range: [58.0, 64.0]
 
 antibiotics:
+  # Both antibiotics the pipeline analyses: imipenem (primary; see
+  # project.primary_antibiotic above) and meropenem, enabled for the meropenem
+  # GWAS build. Adding an antibiotic is this list plus a row in
+  # config/antibiotics.tsv plus the `antibiotic` column of the loci that apply
+  # in config/mechanisms.tsv - no code change; see docs/architecture.md,
+  # "Adding an antibiotic". The order matters: config.antibiotics[0] is read as
+  # the project's fallback antibiotic by several stages.
   - imipenem
+  - meropenem
 
 sample_id:
   # The canonical sample identifier is the VERSIONED assembly accession. It is
@@ -467,6 +475,20 @@ lineage:
 cohort:
   # null = no subset; the run uses the whole manifest.
   subset_file: null
+
+# The cohort join and size gate (papipeline/cohort_gate.py), assessed before
+# any analysis stage runs.
+cohort_gate:
+  # What happens to intermediate (I) isolates once they have been counted.
+  #   exclude : I isolates are held out of the analysis cohort (default; the
+  #             binary R-vs-S model cannot represent them - spec.md D4).
+  #   include : I isolates enter the cohort as their own category.
+  # Either way I is never folded into R or S: the laboratory's call stands.
+  intermediate_policy: exclude
+  # Refuse the run when fewer than this many resistant isolates (R, with an
+  # assembly) remain after the join. An association scan below this size
+  # finds lineage, not resistance. The refusal names this key.
+  min_resistant: 100
 
 convergence:
   # A determinant seen in >= this many independent lineages is convergent.
