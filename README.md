@@ -14,6 +14,14 @@ through configuration alone. A read-only monitoring **dashboard** lives in
 > **n = 10 is grossly underpowered. Nothing this repository produces is a finding
 > about imipenem susceptibility in *P. aeruginosa*.** See
 > [`docs/STATUS.md`](docs/STATUS.md).
+>
+> **Meropenem is now enabled as configuration** (2026-10-08):
+> `config/science.yaml` `antibiotics:` lists `imipenem, meropenem`, the
+> `config/antibiotics.tsv` meropenem row is enabled, and every
+> `config/mechanisms.tsv` row carries `imipenem,meropenem`. Configuration only —
+> **no analysis code changed**, and `project.primary_antibiotic` is **still
+> `imipenem`**, so a meropenem run cannot find its phenotype file yet. See
+> [`TASKS.md`](TASKS.md) Phase 8.
 
 ## What has actually run on real data
 
@@ -33,10 +41,16 @@ REAL-mode run, 10 isolates, `snakemake full_run`, one stage each:
 | 8 recombination | **not run** — `gubbins` cannot run on this platform |
 | 9–16 phylogeny → report | **not run** — downstream of stages 7 and 8 |
 
-Stages 7 and 8 are blocked by the platform, not by the code: `gubbins` has no
-usable macOS arm64 build (see [`docs/environment-arm64.md`](docs/environment-arm64.md)
-§3 — every build is Python-3.10-only and the shipped ones crash with SIGSEGV),
-and stages 9–16 consume stage 8. Running all 16 needs a Linux/conda machine.
+Stage 7's refusal above is the round-12 record, not the current state of the
+tool: `panaroo` has since been installed from source (pinned) with `cd-hit` from
+conda and **verified end-to-end on real Bakta GFF3 for this same 10-isolate
+cohort** — 10,019 gene families, 4,828 core — but **no REAL run has been
+repeated since**, so stages 7–16 remain unrun on real data. Stage 8 is still
+blocked on this machine: `gubbins` has no usable macOS arm64 build (see
+[`docs/environment-arm64.md`](docs/environment-arm64.md) §3 — every conda build
+is Python-3.10-only and the shipped ones crash with SIGSEGV), and stages 9–16
+consume stage 8. Running all 16 needs a Linux/conda machine, and the Linux
+environment file does not solve as pinned yet (`TASKS.md` Phase 8).
 
 ## Known issues in the current results
 
@@ -205,7 +219,7 @@ scripts/         16 per-stage CLI wrappers + 4 shared entry points
 papipeline/      the library: all scientific logic
 results/         run outputs, per mode
 reports/         generated reports
-tests/           498 tests
+tests/           3764 tests collected (see Tests)
 environment/     environment.yml + versions.sh
 docs/            architecture, data contract, scientific rules, reproducibility
 ```
@@ -241,10 +255,10 @@ that is present but not needed is **not executed** to discover its version.
 | 4a SV | `nucmer` | yes | candidate calls only |
 | 5 virulence | `blast` 2.17.0 | yes | native arm64 build |
 | 6 variants | `minimap2` 2.31, `bcftools` 1.23.1 | yes | native arm64 builds |
-| 7 pangenome | `panaroo` + `cd-hit` | **no** | pip-only install; not present in the run env |
+| 7 pangenome | `panaroo` + `cd-hit` | **yes, by source install** | TASKS BLOCKER 3: the conda recipe cannot solve on osx-arm64 (a spurious `prokka` dependency), so panaroo is installed from source via pip and pinned to a commit in `environment/environment.yml`, with `cd-hit=4.8.1` declared as a conda dependency. Verified end-to-end on real Bakta GFF3 for the 10-isolate smoke cohort: exit 0, 10,019 gene families, 4,828 core. Neither is on `PATH` in the `pa-amr` env as it stands — see environment-arm64.md §3 |
 | 8 recombination | `gubbins` | **no** | no usable arm64 build — see environment-arm64.md §3 |
 | 9 phylogeny | `snp-sites`, `iqtree` | yes | native arm64 builds |
-| 12 GWAS | `pyseer` 1.1.2 | limited | opt-in suite; 20 tests skip unless enabled |
+| 12 GWAS | `pyseer` 1.1.2 | limited | opt-in suite; 21 tests skip unless enabled (measured 2026-10-08) |
 | — | `snakemake` | yes | the production path for REAL runs |
 
 `bash environment/versions.sh` prints the current status. Per-tool evidence is in
@@ -253,7 +267,7 @@ that is present but not needed is **not executed** to discover its version.
 ## Tests
 
 ```bash
-python3 -m pytest tests dashboard/tests -q   # 3502 tests
+python3 -m pytest tests dashboard/tests -q   # 3879 tests
 python3 -m pytest tests/unit -q             # parsers and stage logic
 python3 -m pytest tests/integration -q      # config, full run, mode gating
 python3 -m pytest dashboard/tests -q        # dashboard server and sources
@@ -265,13 +279,28 @@ The dashboard suite is **112 passed, 3 skipped** by default and **114 passed,
 adds 32. See [`dashboard/README.md`](dashboard/README.md) for the UI's own
 security model and layout notes.
 
-Latest full run: **3434 passed, 68 skipped, 0 failed**.
+Latest full run, 2026-10-08 (re-run for `TASKS.md` Phase 8):
 
-The 68 skips are not all environmental, and pretending otherwise would be
-misleading: 21 are the real clinical file (`PDC_essential.tsv`, absent by
-design), 10 are `gubbins`, 20 are an opt-in `pyseer` suite
-(`PAPIPELINE_TEST_PYSEER=1` enables it), and 12 are empty-parametrize tests that
-assert nothing in a default run.
+| Invocation | Result |
+|---|---|
+| `pytest tests --collect-only -q` | 3764 collected, **0 errors** |
+| `pytest tests -q` | **33 failed, 3519 passed, 151 skipped, 61 errors** |
+| `pytest dashboard/tests -q` | 112 passed, 3 skipped, 0 failed |
+| `node --test dashboard/tests/js/` | 32 passed, 0 failed |
+
+**The suite is not green and is not reported as green.** All 94 non-passing
+node IDs are listed in `.build/BASELINE_PREEXISTING_FAILURES.txt`, recorded
+from the untouched repository *before* the meropenem build: **0 new failures,
+and 12 previously-failing STUB tests now pass** (the STUB data-root fix). The
+failures are environmental — they need `db/` (`db/reference/…`,
+`db/smoke_genomes`, the Bakta and AMRFinderPlus databases) or `data/`, and
+databases and genomes are never committed, so they fail on any clean checkout.
+
+The 151 skips are not all environmental either: 117 need uncommitted inputs
+(`db/`, `PDC_essential.tsv`, the source-built `tools/gubbins`), 21 are the
+opt-in `pyseer` binary suite (`PAPIPELINE_TEST_PYSEER=1` enables it), 12 are
+empty-parametrize tests that assert nothing in a default run, and 1 needs
+`python-pptx`.
 
 They cover the parsers (FASTA, metadata, annotation, MLST, AMR, mutations),
 sample-ID validation, mechanism mapping, phenotype validation, GWAS input
@@ -309,12 +338,24 @@ column states what was observed and what was not concluded.
 Honest list. Round 12 closed items 1, 2, 3, 6 and 7 below; what remains is here
 with the reason.
 
-1. **Stages 7–16 have never run on real data.** Platform-blocked: `panaroo` +
-   `cd-hit` are not in the run environment, and `gubbins` has no usable macOS
-   arm64 build. Needs a Linux/conda machine.
-2. **The GWAS reference engine has no kinship correction.** It is a
-   mechanics-testing stand-in for pyseer, and says so on every result row.
-   `pyseer` 1.1.2 is available but only its opt-in suite is exercised.
+1. **Stages 7–16 have never run on real data.** Stage 7's tooling has since
+   become available (`panaroo` from a pinned source install, `cd-hit` from
+   conda, verified end-to-end on real Bakta GFF3), but **no REAL run has been
+   repeated since round 12**, so nothing has changed about what ran. Stage 8 is
+   still blocked on this machine — `gubbins` installs and then segfaults — and
+   stages 9–16 consume stage 8. Needs a Linux/conda machine whose environment
+   file solves (`environment/environment-linux.yml` does not solve as pinned;
+   see `TASKS.md` Phase 8).
+2. **The GWAS reference engine has no kinship correction, and the real pyseer
+   path is built but not wired.** `papipeline/gwas_real/` now holds a stage-10
+   kinship matrix (Gower-centred patristic distances) and a two-pass pyseer
+   adapter whose flags are each confirmed against the installed package —
+   both **built and unit-tested, wired to nothing**. Three input resolutions
+   are undecided, and a wrong `variants_path` would silently narrow which
+   variant families are tested, so it is deliberately left unwired. Until it
+   is wired, stage 12's `ReferenceEngine` remains the mechanics-testing
+   stand-in, and says so on every result row. `pyseer` 1.1.2 is available but
+   only its opt-in suite is exercised.
 3. **No plotting layer.** All 13 figures have prepared, tested data tables
    written as JSON; the drawing layer is not implemented.
 4. **`max_depth` is unreviewed.** 250 is inherited, not chosen; the decision to
@@ -325,6 +366,18 @@ with the reason.
 7. **Tool provenance is thin.** `tools_detected` is mostly `UNKNOWN` by design;
    `config/references.tsv` is the only place versions live and it is largely
    unpinned.
+8. **`project.primary_antibiotic` is still `imipenem`.** Meropenem is enabled
+   as configuration (banner above), but the key decides which
+   `<antibiotic>_phenotype.tsv` is loaded, so **a meropenem run cannot find its
+   phenotype file yet**. Flipping it now was measured to break 96 tests
+   (113 failed / 89 errors in a scratch flip, restored byte-exact), because the
+   fixtures ship only `imipenem_phenotype.tsv`. It needs a meropenem phenotype
+   fixture first — open work, not done.
+9. **`unitig-caller` is absent and its flags were never verified with
+   `--help`.** The adapter built for ticket 15's `oprD_absent` / `oprD_LoF`
+   producer records that and REAL raises `UnverifiedFlagsError` rather than
+   guess a flag, so the producer is built but deliberately produces nothing in
+   REAL. Install the tool, run `--help`, record the real flags.
 
 ## Documentation
 

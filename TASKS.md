@@ -342,8 +342,13 @@ raises `CalledProcessError` on a signal and that is caught as a
 `SubprocessError`. That message is wrong for a segfault and will mislead anyone
 who trusts it.
 
-Parked pending a production-machine OS answer or an explicit go-ahead. Blocks
-`recombination` (the last stage in `UNBUILT_STAGES`).
+Parked pending a production-machine OS answer or an explicit go-ahead. It still
+blocks `recombination` **on this machine**. The sentence that used to end this
+paragraph — "the last stage in `UNBUILT_STAGES`" — was removed on 2026-10-08:
+`UNBUILT_STAGES` is `{}` (checked: `python3 -c "import papipeline.run as r;
+print(r.UNBUILT_STAGES)"`), so `recombination` is a dispatched stage, not an
+unbuilt one. What blocks it here is the binary, not the taxonomy. The segfault
+findings above stand.
 
 ### BLOCKER 3 — panaroo on osx-arm64. **RESOLVED. Not an architecture wall.**
 
@@ -483,6 +488,99 @@ above can be introduced without the suite failing.
 
 ---
 
+## Phase 8 — meropenem GWAS build (2026-10-08)
+
+Six build packages, seven commits (`1a50b60` + `552e56c` are the two rounds of
+the meropenem config package). Nothing in this phase ran on real data: no
+`data/`, no `db/`, no `PDC_essential.tsv` was read, and no REAL run was
+started. The only real-data evidence this repository has remains the round-12
+10-isolate smoke run (stages 1–6a).
+
+| Commit | Package |
+|---|---|
+| `1a50b60` | meropenem config enablement + `papipeline/cohort_gate.py` |
+| `552e56c` | meropenem config round 2 (load-bearing YAML anchor, old-state tests) |
+| `098d3e2` | layer encoder (`papipeline/layers/`) |
+| `248b4f3` | stage-10 kinship matrix + two-pass pyseer adapter (`papipeline/gwas_real/`) |
+| `552ac7a` | downstream statistics (`papipeline/downstream/`) |
+| `5ffcdda` | Linux runner (`scripts/linux/`, `config/machines/linux.yaml`, `docs/LINUX_RUN.md`) |
+| `a379cf6` | serial integration (registries, cohort gate, layers, downstream wiring) |
+
+### Weakest true state, per package
+
+`built` / `wired` / `verified` as defined under **Build state is not "done"**
+below. Nothing here is **verified on real data**; the word `verified` never
+means more than a test run on this machine.
+
+| Package | Weakest true state | Evidence and limits |
+|---|---|---|
+| **Meropenem enablement** | **wired and verified (config only)** | `config/science.yaml` `antibiotics:` is `imipenem, meropenem`; the `config/antibiotics.tsv` meropenem row is enabled; all 22 `config/mechanisms.tsv` data rows read `imipenem,meropenem` (21 rewritten here, `oprD` already had both). **No analysis code changed.** |
+| **Cohort gate** (`papipeline/cohort_gate.py`) | **wired, not verified on a real cohort** | Evaluated before stage 1 in every mode, recorded on `RunResult` and unioned into `run_manifest.json` under `cohort_gate`. Keys: `cohort_gate.intermediate_policy` (default `exclude`), `cohort_gate.min_resistant` (default `100`) — **enforced in REAL only**, because the 20-sample TEST fixture is 7 R of 20, below the floor by construction. Counts are recorded in every mode, so the gate is never silent. Observed on today's TEST run: `status=evaluated, n_resistant=7, n_in_cohort=17, enforced=false`. |
+| **Layer encoding** (`papipeline/layers/`) | **wired** | Called at the pangenome stage in REAL and TEST, never STUB; a TEST run writes the 8 layer files under `results/test/intermediate/stages/layers/`. Keys `layers.min_carriers: 5`, `layers.max_prevalence: 0.98`. The **unitig adapter is built and deliberately unwired**: `unitig-caller` is absent from `PATH`, its flags were never verified with `--help`, and REAL raises `UnverifiedFlagsError` rather than guess a flag. That adapter is the `oprD_absent` / `oprD_LoF` producer ticket 15 said did not exist. |
+| **Kinship** (`papipeline/gwas_real/kinship.py`) | **built and unit-verified** | 13 tests in `tests/unit/test_gwas_real_kinship.py`, a **pre-existing spec test that passes with zero edits** (the file is byte-identical to its committed state). It reuses `stages.similarity.patristic_distances` and Gower-centres the squared distances. Stage 10 `similarity` was already a registered stage; `PREREQUISITES["gwas"]` now includes `"similarity"` (`a379cf6`). |
+| **pyseer two-pass adapter** (`papipeline/gwas_real/adapter.py`) | **built, NOT wired** | Nothing outside `papipeline/gwas_real/` calls it (the only `gwas_real` hit in `papipeline/` outside the package is a comment in `run.py`). Three input resolutions are undecided; wiring it now would risk a wrong `variants_path` silently narrowing which variant families are tested — a wrong answer rather than a failure. Separate and still open: `REAL_REFUSING_STAGES["gwas"]` reads "no REAL engine", but `_build_gwas_engine` injects `PyseerEngine` in REAL when pyseer resolves, so that entry is conditional on pyseer being absent and **this build did not re-verify it**. |
+| **Downstream** (`papipeline/downstream/`) | **built; runner wired for REAL only** | Seven steps in the pinned order, positive-control gate first, writing `reports/downstream_evidence.tsv`. **Not exercised in TEST**: measured, `run_control_gate` raises on the committed fixtures because `any_MBL` and `oprD_burden` are both absent from stage 12's TEST results, and `build_report` re-runs the gate with no disable flag — wiring it unconditionally would fail every TEST run. Steps 2–7 were measured to execute correctly on TEST fixtures once the gate is fed a recovering baseline. Two tests pin the mode gate from both ends; today's TEST run wrote no downstream artefact (asserted). |
+| **Linux runner** (`scripts/linux/`, `config/machines/linux.yaml`, `docs/LINUX_RUN.md`, `docs/PIPELINE_FLOWCHART.md`) | **built, never executed on a Linux host** | `micromamba create --dry-run --platform linux-64 -f environment/environment-linux.yml` **FAILS as pinned** — re-run today, exit 1: `gubbins =3.4.1 * does not exist` on linux-64 (the recorded probes in `.build/linux-ready.probe.*` show every published linux-64 build is py310, and `samtools=0.1.19` needs `openssl <=1.1.1` against Python 3.11's `>=3.5.7`). The same file minus those pins solves: **357 packages** (`.build/linux-ready.solve.linux-64.core-nopy3tools.txt`). **No pin was changed**; a re-solve is deliberate work nobody has done. `shellcheck` is not installed — substitute evidence is `bash -n` on all three scripts (re-run today, exit 0). `config/machines/linux.yaml` sets `allow_real_mode: false`. |
+
+### Deliberately unwired, and why
+
+- **`papipeline/gwas_real/`** — three input resolutions undecided (`phenotype_path`,
+  `variants_path`, `covariates_path`), plus `RealGwasRun.association_table`
+  returned unparsed. Wiring it would put an unread file in `result.outputs` and
+  could silently narrow the variant families tested.
+- **The unitig adapter** — `unitig-caller --help` was never run, so no flag of
+  that tool may be claimed (AGENTS.md rule 1). REAL refuses by design.
+- **Downstream in TEST/STUB** — the positive-control gate cannot pass on the
+  committed fixtures (measured); the alternative was tuning
+  `downstream.positive_controls` to fit a fixture, which is forbidden.
+- **Layers in STUB** — STUB outputs are header-only and `encode_layers` reads
+  source tables a stub run does not have.
+
+### Verification run, 2026-10-08 (re-run for this report)
+
+| Check | Result |
+|---|---|
+| `python3 -m pytest tests --collect-only -q` | **3764 collected, 0 errors** |
+| `python3 -m pytest tests -q --tb=no` | **33 failed, 3519 passed, 151 skipped, 61 errors** |
+| non-passing node-IDs vs `.build/BASELINE_PREEXISTING_FAILURES.txt` (106 ids, recorded from the untouched repository **before** this build) | 94 ids today, **0 new failures**, **12 previously-failing STUB tests now pass** (the STUB data-root fix) |
+| sampled causes of the 94 | missing `db/reference/…` and `db/smoke_genomes` — databases and genomes are never committed (AGENTS.md rule 4), so these fail on any clean checkout |
+| `python3 -m pytest dashboard/tests -q` | 112 passed, 3 skipped |
+| `node --test dashboard/tests/js/` | 32 pass, 0 fail |
+| `python3 scripts/common/run_pipeline.py --mode TEST` / `--mode STUB` | exit 0 both |
+| `snakemake -n`, `mode=STUB`, `machine=config/machines/laptop.yaml` and `…/linux.yaml` | exit 0 both |
+
+**The suite is not green and must not be called green**: 33 failed / 61 errors,
+all pre-existing and all needing `db/` or `data/` inputs that are absent by
+design. The 151 skips are 117 tests needing uncommitted inputs (`db/`,
+`PDC_essential.tsv`, the source-built `tools/gubbins`), 21 opt-in
+pyseer-binary tests (`PAPIPELINE_TEST_PYSEER=1`), 12 empty-parametrize tests
+and 1 `python-pptx`. Definition-of-done item 2 ("All pytest tests pass … 1771
+passed at `239db00`") is a historical record of that commit; it is not true of
+a clean checkout today.
+
+### Open items after this build
+
+1. **`project.primary_antibiotic` is still `imipenem`.** Meropenem is enabled
+   as configuration, but the key decides which `<antibiotic>_phenotype.tsv` is
+   loaded, so a meropenem REAL run cannot find its phenotype file yet.
+   **Measured**: flipping it breaks 96 tests (a scratch flip gave 113 failed /
+   89 errors; the file was restored byte-exact) because the fixtures ship only
+   `imipenem_phenotype.tsv`. Flipping it needs a `meropenem_phenotype.tsv`
+   fixture first. Recorded in `.build/meropenem-config.registry-notes.md`.
+2. **The ~500-isolate meropenem cohort has not been assembled or analysed.** No
+   cohort-gate refusal threshold has ever been exercised against a real cohort.
+3. **`gwas_real` input resolutions** (three) — undecided; see above.
+4. **`unitig-caller` flags** — install it, run `--help`, record the real flags,
+   then implement the REAL branch. Until then REAL raises `UnverifiedFlagsError`.
+5. **Linux environment re-solve** — `environment/environment-linux.yml` does not
+   solve for linux-64 as pinned; changing a pin is a decision, not a chore.
+6. **Downstream is REAL-only** — no TEST path, by measurement rather than by
+   preference; revisit when a REAL cohort exists.
+7. **Stage-7 GPA contract (long vs wide)** — untouched by this build. Nothing
+   here closes it.
+8. **`REAL_REFUSING_STAGES["gwas"]`** — conditional on pyseer being absent;
+   not re-verified by this build.
+
 ---
 
 ## Build state is not "done"
@@ -503,9 +601,9 @@ well-tested and unwired while their tickets read "done":
 | directional join (`papipeline.join`) | **verified** - wired into the phenotype branch | Phase 3 |
 
 | continuous trait in the GWAS model | **built** - the model still takes binary R-vs-S | ticket 16, not started |
-| SNP calling vs PAO1 (`variants`) | **not built** | ticket 14; spec D1 stage 6. No stage in `STAGE_ORDER`. |
-| recombination masking (`recombination`) | **not built** | spec D1 stage 8 (gubbins). No stage in `STAGE_ORDER`; gubbins is also unrunnable on this machine (py39/py310 vs 3.11). |
-| similarity matrix (`similarity`) | **not built** | spec D1 stage 10 (tree distance). No stage in `STAGE_ORDER`. |
+| SNP calling vs PAO1 (`variants`) | **wired** | Corrected 2026-10-08: this row read "**not built** … No stage in `STAGE_ORDER`", which is false. `variants` is in `STAGE_ORDER`, in `EXECUTION_ORDER`, and dispatched (`papipeline/run.py:1299`); `UNBUILT_STAGES` is `{}`. ticket 14. **Real data:** `docs/STATUS.md` records stage 6 running on the round-12 10-isolate smoke subset (509,612 alleles over 9 isolates), while ticket 14's own status line still says a REAL run has not reached stage 6. That contradiction is pre-existing and is **not** resolved here. |
+| recombination masking (`recombination`) | **wired** | Corrected 2026-10-08: also read "**not built** … No stage in `STAGE_ORDER`". It is in `STAGE_ORDER` and dispatched through `derive_recombination_tables` (`papipeline/run.py:1542`); in REAL its `run()` raises only while `runtime.allow_real_mode` is false, which is a gate on the run, not a refusal of the stage. spec D1 stage 8 (gubbins). **Still unrunnable on this machine**: the conda gubbins binary segfaults (BLOCKER 2, findings unchanged) and the source build has not been run (`tools/gubbins` absent). |
+| similarity matrix (`similarity`) | **wired** | Corrected 2026-10-08: also read "**not built** … No stage in `STAGE_ORDER`". It is in `STAGE_ORDER` and dispatched (`papipeline/run.py:1596`); REAL is gated by `allow_real_mode`, not refused. spec D1 stage 10 (tree distance). `PREREQUISITES["gwas"]` names it since `a379cf6`, because the REAL pyseer path consumes its matrix as `--distances`. Never run on real data. |
 
 ### Phase 3, first pass: the workflow loads, and has never run
 
@@ -769,10 +867,12 @@ why rather than narrowing the selector to make it finish.
 
 ### Also still open, for whoever picks it up
 
-- `TASKS.md` "BLOCKER 3 — panaroo has no osx-arm64 build" is **stale**. panaroo
-  works on arm64 via a pinned pip source; `docs/environment-arm64.md` §3 and
-  `environment/environment.yml` are correct and were updated on
-  `step3-regulators`. This file was not.
+- The note that `TASKS.md`'s "BLOCKER 3 — panaroo has no osx-arm64 build" was
+  stale is **itself stale**: BLOCKER 3 above already reads "RESOLVED. Not an
+  architecture wall." and carries the pip-source resolution, the cd-hit conda
+  dependency and the real-Bakta verification. `docs/environment-arm64.md` §3
+  and `environment/environment.yml` are correct too. Nothing to fix here any
+  more; recorded so the self-reference is not re-opened.
 - The Snakefile's pangenome docstring said "Stage 9"; corrected to **Stage 7**
   per spec (AGENTS.md: the spec wins). `run()`'s docstring and log message in
   `stages/pangenome.py` still say "Stage 9" — fix them in the same pass as the
