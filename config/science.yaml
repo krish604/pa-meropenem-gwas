@@ -493,6 +493,19 @@ cohort_gate:
   # finds lineage, not resistance. The refusal names this key.
   min_resistant: 100
 
+# The layer feature encoding (papipeline/layers): the drop rule applied to the
+# L1-L5 feature matrices before they are written. Ticket 15 states both
+# numbers; they live here rather than in code, and every drop is logged with
+# the key that produced it.
+layers:
+  # Drop a feature carried by fewer isolates than this (a carrier is an
+  # isolate with value > 0, so the rule also covers the QRDR count column).
+  # Fewer than 5 carriers cannot support an association.
+  min_carriers: 5
+  # Drop a feature carried by more than this fraction of isolates: background,
+  # not contrast. The boundary is strict - more than 0.98, not 0.98 or more.
+  max_prevalence: 0.98
+
 convergence:
   # A determinant seen in >= this many independent lineages is convergent.
   min_independent_lineages: 2
