@@ -1,0 +1,164 @@
+# =============================================================================
+# Machine overlay: LINUX ANALYSIS MACHINE (the 16-stage run)
+#
+# This file may contain ONLY `machine`, `machine_class`, `paths`, `runtime` and
+# `tools`. Anything else is a configuration error: the science lives solely in
+# config/science.yaml, so this machine runs exactly the same science as the
+# laptop and the bigmachine, with more of everything else.
+#
+# SOLVE VERDICT (measured, 2026-10-07, from a macOS host):
+#
+#   environment/environment-linux.yml does NOT solve for linux-64 as pinned.
+#   No pin in that file has been changed, because the pins are the comparison
+#   contract between machines and relaxing one to make a solve pass would be
+#   inventing a version. Two independent blockers, both measured rather than
+#   guessed:
+#
+#     1. gubbins=3.4.1 has NO linux-64 build for Python 3.11.16. Every published
+#        linux-64 build is Python 3.10 (`gubbins 3.4.1 py310pl5321...`,
+#        `gubbins 3.4.3 py310...`), so under python=3.11.16 the solver reports
+#        `gubbins =3.4.1 * does not exist`, and under python=3.11.16 a bare
+#        `gubbins` (any version) fails the same way. Solving the same file with
+#        python=3.10 does not help: matplotlib-base, networkx, scipy,
+#        snakemake-minimal and uvicorn are then the ones that do not exist.
+#     2. samtools=0.1.19 requires openssl >=1.1.0,<=1.1.1, which conflicts with
+#        python=3.11.16's openssl >=3.5.7. The same pin solves fine next to
+#        python=3.10. Modern samtools is not the problem: the core stack minus
+#        gubbins/mlst/samtools/panaroo solves for linux-64 in 357 packages
+#        (698 MB) and pulls samtools 1.23.1 along the way.
+#
+#   mlst=2.33.1 and panaroo=1.7.0 are also reported as blockers of the full
+#   file. Which of their own dependencies conflicts was not isolated, so no
+#   claim is made about them beyond that observation.
+#
+#   Evidence, all reproducible with
+#   `micromamba create --dry-run --platform linux-64 -f environment/environment-linux.yml`
+#   plus CONDA_OVERRIDE_GLIBC=2.31 CONDA_OVERRIDE_LINUX=5.10 when solving FROM
+#   macOS (the solver otherwise reports every linux package as missing because
+#   glibc is a host-resolved virtual package -- this is why the original
+#   un-overridden logs show a wall of "missing"):
+#       .build/linux-ready.solve.linux-64.fresh-full.txt      (the three blockers)
+#       .build/linux-ready.solve.linux-64.core-nopy3tools.txt (EXIT=0, 357 pkgs)
+#       .build/linux-ready.probe.gubbins-python311.txt        (EXIT=1, no build)
+#       .build/linux-ready.probe.samtools019-py311.txt        (EXIT=1, openssl)
+#
+#   So: step 1 of docs/LINUX_RUN.md currently FAILS on purpose, and is written
+#   that way rather than papered over. Re-solving the environment deliberately -
+#   deciding a gubbins/python or samtools strategy, recording the new pin and
+#   its evidence - is a separate decision that has not been taken. Do not guess
+#   a version to make the solve green.
+#
+# NOTHING ELSE HERE HAS BEEN VERIFIED ON REAL HARDWARE either. This overlay was
+# written on a macOS host; the only linux-64 evidence in this repository is the
+# solves quoted above. Before the first run:
+#
+#   1. resolve the solve, as above;
+#   2. set `runtime.threads` / `runtime.memory_mb` from THIS machine
+#      (`nproc`, and MemTotal in /proc/meminfo). The values below are
+#      placeholders copied from bigmachine.yaml's placeholder convention - a
+#      wrong memory ceiling is how an OOM looks like a bioinformatics bug;
+#   3. provision the databases listed in config/references.tsv out of band, then
+#      record them with `bash environment/versions.sh` (bootstrap does this);
+#   4. run `snakemake --dry-run` with this overlay before any real cohort.
+#
+# No sample cap, for the same reason bigmachine has none: the cap is a laptop
+# safety rail, not a property of the science, and must not be written as a
+# target the run has to hit.
+# =============================================================================
+
+machine: linux
+machine_class: analysis
+
+paths:
+  # All repository-relative, by an invariant tests/unit/test_reference_ownership.py
+  # enforces. An absolute path belongs in an argument to scripts/linux/*.sh, not
+  # in a tracked file: a tracked absolute path is correct only in the checkout
+  # where it was written and wrong everywhere else.
+  data_root: data
+  test_data_root: test_data
+  results_root: results
+  reports_root: results/reports
+  intermediate_root: results/intermediate
+  status_dir: status
+  db_root: db
+  # WHICH reference this is (GCF_000006765.1, 6264404 bp) is science, in
+  # config/science.yaml. Only its location is a machine fact.
+  reference_fasta: db/reference/GCF_000006765.1/GCF_000006765.1_ASM676v1_genomic.fna
+  # Untracked clinical data (AGENTS.md rule 4), relative to the repository root
+  # and absent from a fresh checkout. Read only by a smoke overlay; this one
+  # builds its cohort from data/metadata/sample_metadata.tsv.
+  pdc_table: PDC_essential.tsv
+
+runtime:
+  # PLACEHOLDER VALUES. Not measured for this machine - see the header. Set them
+  # from `nproc` and /proc/meminfo before the first run.
+  threads: 32
+  memory_mb: 65536
+  # Bounds for the vendored unique-pattern helper (step 12a), which shells out
+  # to `sort`. Placeholder for the same reason: these are the machine's numbers,
+  # not the laptop's, and `sort` is a separate process, so they are deliberately
+  # not this pipeline's own memory_mb. Upstream's own defaults are 1024 Mb / 1.
+  unique_patterns_memory_mb: 8192
+  unique_patterns_cores: 4
+  # Scratch for the same helper's `sort -T`. /var/tmp rather than /tmp because
+  # on a Linux analysis machine /tmp is commonly a small tmpfs and a
+  # cohort-sized patterns file will not fit there. Under `runtime` rather than
+  # `paths`, whose values are repository-relative by that same invariant; a
+  # scratch directory cannot be. Verify with `df /tmp /var/tmp` on the machine.
+  unique_patterns_temp_dir: /var/tmp
+  log_level: INFO
+  # Stays closed until the analysis phase is authorised in writing AND the
+  # operator says `run real samples`. scripts/linux/run_meropenem_real.sh is
+  # the only thing that opens it, and only for one session: it exports the
+  # override after checking CONFIRM_REAL=yes, never by editing this file.
+  allow_real_mode: false
+  # No sample cap (see header).
+  observatory:
+    enabled: false
+    db: ~/.local/share/papipeline/observatory.db
+    run_key: pipeline
+
+# --- tool availability ------------------------------------------------------
+# `available: true` here is an inventory claim about what a SUCCESSFUL bootstrap
+# of environment/environment-linux.yml is supposed to deliver on this machine -
+# it is NOT a statement that the file solves today, because it does not (header).
+# The one tool the file cannot deliver at any resolution is `gubbins`, which is
+# why it alone is `false`:
+#
+#   gubbins   FALSE, measured, not assumed. There is no linux-64 build for
+#             Python 3.11.16 (see header), so no solve of this environment can
+#             put a conda gubbins on this machine while the python pin stands.
+#             Stage 8 (recombination) will therefore report the tool as missing
+#             by name and dispatch accordingly, rather than failing mid-run.
+#             Flip it to true only after a recorded decision on how gubbins is
+#             to be obtained here (a py310 side environment, a source build, or
+#             a deliberate python downgrade), with the evidence next to it.
+#
+#   samtools  TRUE as inventory, but the pinned 0.1.19 does not install (see
+#             header). The core solve pulled 1.23.1 instead, so the tool is
+#             deliverable; the PIN is what is not. Resolving that is part of
+#             the same environment decision.
+#
+#   mlst,     TRUE as inventory; both are reported blockers of the full file's
+#   panaroo   solve and neither conflict was isolated. Recheck after the
+#             environment is re-solved and correct this block to match what the
+#             solve actually showed - do not leave a hopeful value here.
+#
+# Do not "fix" any of this to match the laptop: the laptop's `true` values were
+# earned by a solve and a run on osx-arm64, and none of that evidence is
+# linux-64 evidence.
+tools:
+  seqkit:      { available: true }
+  bakta:       { available: true }
+  mlst:        { available: true }
+  amrfinder:   { available: true }
+  blast:       { available: true }
+  minimap2:    { available: true }
+  samtools:    { available: true }
+  bcftools:    { available: true }
+  iqtree:      { available: true }
+  snp-sites:   { available: true }
+  pyseer:      { available: true }
+  mafft:       { available: true }
+  panaroo:     { available: true }
+  gubbins:     { available: false }

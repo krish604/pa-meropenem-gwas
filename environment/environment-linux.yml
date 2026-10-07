@@ -35,6 +35,61 @@
 # later phase once the Linux run is actually prepared.
 # =============================================================================
 
+# =============================================================================
+# SOLVE VERDICT - measured 2026-10-07, linux-64, micromamba 2.9.0
+#
+# THIS FILE DOES NOT SOLVE FOR linux-64 AS PINNED. Verified with exactly the
+# dry-run check the header above requires:
+#
+#   micromamba create --dry-run --platform linux-64 -f environment/environment-linux.yml
+#
+# Two independent blockers, each isolated on its own. NO PIN HAS BEEN CHANGED:
+# the pins are what makes the laptop result and the analysis result comparable,
+# and relaxing one to make a solve go green would be inventing a version (AGENTS.md
+# rule 1). Re-solving is a deliberate decision that has not been taken.
+#
+#   1. gubbins=3.4.1 has NO linux-64 build for Python 3.11.16.
+#      Every published linux-64 build is Python 3.10 (`gubbins 3.4.1
+#      py310pl5321h577a1d6_0`, `gubbins 3.4.3 py310hfc0ef84_1`), so under
+#      python=3.11.16 the solver reports `gubbins =3.4.1 * does not exist`,
+#      and a bare `gubbins` (any version) fails identically. The caveat in the
+#      header above is therefore answered for this platform: the
+#      Python-version question is not hypothetical here, it is the blocker.
+#      Falling back to python=3.10 does not help - it trades this blocker for
+#      matplotlib-base=3.11.2, networkx=3.6.1, scipy=1.17.1,
+#      snakemake-minimal=9.27.0 and uvicorn=0.54.0, none of which exist for
+#      py310 on linux-64.
+#
+#   2. samtools=0.1.19 cannot coexist with python=3.11.16.
+#      0.1.19 requires `openssl >=1.1.0,<=1.1.1`; Python 3.11.16 brings
+#      `openssl >=3.5.7`. The same pin solves cleanly next to python=3.10, and
+#      modern samtools is not the problem: the core stack minus
+#      gubbins/mlst/samtools/panaroo solves for linux-64 in 357 packages
+#      (698 MB) and pulls samtools 1.23.1 along the way.
+#
+#   mlst=2.33.1 and panaroo=1.7.0 are ALSO reported as blockers of the full
+#   file. Which of their own dependencies conflicts was not isolated, so no
+#   claim is made about them beyond that observation.
+#
+# Evidence (regenerate any of these before trusting them):
+#   .build/linux-ready.solve.linux-64.fresh-full.txt        the three blockers
+#   .build/linux-ready.solve.linux-64.core-nopy3tools.txt   EXIT=0, 357 pkgs
+#   .build/linux-ready.probe.gubbins-python311.txt          EXIT=1, no build
+#   .build/linux-ready.probe.gubbins-anypy311.txt           EXIT=1, any version
+#   .build/linux-ready.probe.samtools019-py311.txt          EXIT=1, openssl
+#   .build/linux-ready.solve.linux-64.py310.txt             the py310 trade-off
+#
+# Solving FROM macOS additionally needs CONDA_OVERRIDE_GLIBC=2.31
+# CONDA_OVERRIDE_LINUX=5.10, because glibc is a host-resolved virtual package
+# and without them the solver reports every linux-only package as missing -
+# which is what the original, un-overridden logs show. On the Linux host
+# neither override is needed.
+#
+# Ordered steps, and what to do about this, are in docs/LINUX_RUN.md step 1.
+# The machine overlay config/machines/linux.yaml records the same verdict and
+# sets gubbins `available: false` as its consequence.
+# =============================================================================
+
 name: pa-amr
 
 channels:
