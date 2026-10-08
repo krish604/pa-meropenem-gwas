@@ -233,14 +233,19 @@ PREREQUISITES: Mapping[str, FrozenSet[str]] = {
     "cohort_variants": frozenset({"variants"}),
     "recombination": frozenset({"pangenome"}),
     "similarity": frozenset({"phylogeny"}),
-    # `similarity` (stage 10) added on integration: the REAL path reads
-    # stage 10's matrix as pyseer's `--distances`, and `--lineage` *requires*
-    # `--distances` (pyseer `__main__.py:220`) with `gwas_real.lineage: true`
-    # committed in config/science.yaml. Naming `similarity` rather than
-    # `phylogeny` is the honest dependency: the adapter takes the filename from
-    # `STAGE_TABLES["similarity"][0]` rather than retyping it, so the file this
-    # edge names is the file it opens. Side effect: `--only gwas` now schedules
-    # stage 10 too; full runs are unaffected (`reporting` requires both).
+    # `similarity` (stage 10) added on integration, for the pyseer *adapter*
+    # path (`papipeline/gwas_real/adapter.py`, built but NOT wired): that
+    # adapter takes its distances matrix from stage 10, and `--lineage`
+    # *requires* `--distances` (pyseer `__main__.py:220`) with
+    # `gwas_real.lineage: true` committed in config/science.yaml. Naming
+    # `similarity` rather than `phylogeny` is the honest dependency: the
+    # adapter takes the filename from `STAGE_TABLES["similarity"][0]` rather
+    # than retyping it, so the file this edge names is the file it opens.
+    # Nothing *executed* today reads that file: a run reaches stage 12 through
+    # `_build_gwas_engine` -> `PyseerEngine`, which passes `--similarity` (a
+    # kinship matrix it builds itself) and never `--lineage`/`--distances`.
+    # Side effect of the edge: `--only gwas` now schedules stage 10 too; full
+    # runs are unaffected (`reporting` requires both).
     "gwas": frozenset({"phenotype", "variants", "pangenome", "similarity"}),
     "convergence": frozenset({"amr", "phylogeny"}),
     "cooccurrence": frozenset({"amr", "variants", "annotation"}),

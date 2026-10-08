@@ -411,9 +411,13 @@ gwas_real:
   # presence/absence (pres) matrix stage 12 already hands pyseer, so a REAL
   # run without configuration analyses the same features TEST does.
   variant_source: pres
-  # Report lineage effects. pyseer refuses `--lineage` without `--distances`
-  # (__main__.py:220), so lineage here consumes stage 10's similarity.tsv -
-  # the file pyseer/input.py::load_structure reads with pd.read_table(index_col=0).
+  # Report lineage effects, on the adapter path (papipeline/gwas_real/ - built,
+  # not wired). pyseer refuses `--lineage` without `--distances`
+  # (__main__.py:220), so that path consumes stage 10's similarity.tsv - the
+  # file pyseer/input.py::load_structure reads with pd.read_table(index_col=0).
+  # The engine a run actually gets in REAL is PyseerEngine, which passes
+  # `--similarity` (its own kinship matrix) and never `--lineage`: it flags a
+  # lineage-confounded feature instead of modelling lineage as a fixed effect.
   lineage: true
   # Grouped burden testing: the VCF regions file, or null for a single-variant
   # scan. pyseer declares `--burden BURDEN` as a *value* (not a switch) and
