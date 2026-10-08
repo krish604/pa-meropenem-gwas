@@ -607,7 +607,49 @@ a clean checkout today.
     — **deliberately not edited**, because no test is edited on this build; the
     assertions themselves are true and were left byte-identical. A test-owner
     pass should reword that prose to say "the adapter path" rather than "stage
-    12's REAL path".
+    12's REAL path". The same sweep then reached four more stale blocks, all
+    corrected 2026-10-08 in **comments/strings only, no test touched**:
+    `stages/gwas.py`'s refusal comment claimed "`run.py`'s stage-12 call site
+    passes no `engine=`" — it passes `engine=_build_gwas_engine(...)`, whose
+    `None` (not an unwired call site) is what reaches the guard when pyseer
+    does not resolve (`7569ffa`); `stages/similarity.py`'s `run()` docstring
+    and gate comment claimed "REAL has no caller yet" and a place in
+    `UNBUILT_STAGES` — both false, `UNBUILT_STAGES` is `{}` and the Snakefile
+    rule routes through `run_rule.py` → `scripts/common/run_stage.py`
+    (`4030245`); `REAL_REFUSING_STAGES["gwas"]`'s value said "no REAL engine"
+    unconditionally while `_build_gwas_engine` injects `PyseerEngine` when
+    pyseer resolves, and the dashboard shows that value verbatim as a badge
+    reason (`6904a35`) — the `docs/STATUS.md` "not re-verified by this build"
+    note about exactly this is now discharged. The refusal *messages* were left
+    byte-identical: their stage-10 clause is true of the dispatched artifact
+    (next item).
+11. **Stage 10's `--distances` file: four sources disagree about its shape,
+    and the consumer needs the one the pipeline does not produce.**
+    What lands on disk is the **packed** contract form — `run.py`'s dispatch
+    writes the square matrix via `write_matrix` and then `write_tsv` overwrites
+    the same path with `STAGE_TABLES["similarity"]`'s
+    (`sample_id`, `distances`) two-column shape, which
+    `test_similarity_contract.py:92` pins. Against that: the module docstring
+    and `write_matrix` say square; `docs/data_contract.md:462` says square
+    *and* names a file (`10_similarity.tsv`) that does not exist (real:
+    `similarity.tsv`); and the adapter's `_read_matrix_ids` parses square, so
+    pyseer's `load_structure` (`m.loc[ids, ids]`) would KeyError on the packed
+    file — empirically verified. Latent, not live: the adapter is unwired, the
+    wired `PyseerEngine` never reads this file, and the adapter's tests bypass
+    the overwrite by calling `similarity.run(out_path=)` directly. Surfaced,
+    not resolved — either direction touches pinned tests (rule 3). Decision
+    record: issue 27,
+    `.scratch/imipenem-gwas-dashboard/issues/27-stage10-distances-shape.md`.
+    Same file also notes a badge-ordering latent: `badges.py` checks `refused`
+    before `completed`, so a hypothetical pyseer-resolved REAL run would badge
+    a completed gwas `refused`.
+12. **Two similarity test docstrings describe a world that no longer exists.**
+    `test_similarity_stage.py:3` says "The stage is still in
+    `UNBUILT_STAGES`"; `test_similarity_real_caller.py`'s gate docstring says
+    the Snakefile rule "points at a runner nobody wrote" and "the stage is the
+    only place a gate can live". The assertions are true and were left
+    byte-identical — no test is edited on this build; the stage code they
+    describe was corrected in `4030245`. A test-owner pass should reword both.
 
 ---
 

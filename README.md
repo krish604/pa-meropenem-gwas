@@ -350,12 +350,16 @@ with the reason.
    path is built but not wired.** `papipeline/gwas_real/` now holds a stage-10
    kinship matrix (Gower-centred patristic distances) and a two-pass pyseer
    adapter whose flags are each confirmed against the installed package —
-   both **built and unit-tested, wired to nothing**. Three input resolutions
-   are undecided, and a wrong `variants_path` would silently narrow which
-   variant families are tested, so it is deliberately left unwired. Until it
-   is wired, stage 12's `ReferenceEngine` remains the mechanics-testing
-   stand-in, and says so on every result row. `pyseer` 1.1.2 is available but
-   only its opt-in suite is exercised.
+    both **built and unit-tested, wired to nothing**. Three input resolutions
+    are undecided, and a wrong `variants_path` would silently narrow which
+    variant families are tested, so it is deliberately left unwired. A fourth
+    precondition surfaced 2026-10-08: the `--distances` file this adapter
+    would read from stage 10 is written **packed** by dispatch while the
+    adapter parses **square** — the shape must be decided before wiring
+    (issue 27, `.scratch/imipenem-gwas-dashboard/issues/`). Until it
+    is wired, stage 12's `ReferenceEngine` remains the mechanics-testing
+    stand-in, and says so on every result row. `pyseer` 1.1.2 is available but
+    only its opt-in suite is exercised.
 3. **No plotting layer.** All 13 figures have prepared, tested data tables
    written as JSON; the drawing layer is not implemented.
 4. **`max_depth` is unreviewed.** 250 is inherited, not chosen; the decision to
