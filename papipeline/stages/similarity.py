@@ -526,10 +526,12 @@ def run(
     """Stage 10 entry point.
 
     Args:
-        config: Loaded configuration. Unused today; taken so the eventual REAL
-            caller's options have somewhere to come from.
+        config: Loaded configuration. REAL reads ``runtime.allow_real_mode``
+            from it (the gate below) and resolves the stage-9 tree through
+            ``phylogeny_dir``.
         manifest: The cohort. Every sample must be a tip in the tree.
-        mode: ``TEST`` reads the committed tree. ``REAL`` has no caller yet.
+        mode: ``TEST`` reads the committed tree. ``REAL`` reads the stage-9
+            tree the dispatch already built, behind the gate below.
         tree_path: The stage-9 Newick tree.
         out_path: Where to write the matrix. Omit to skip writing.
 
@@ -537,8 +539,12 @@ def run(
         One row per manifest sample: ``{sample_id, distances}``.
 
     Raises:
-        NotImplementedError: In ``REAL`` mode. There is no caller yet, and
-            returning an empty matrix would claim every isolate is identical.
+        NotImplementedError: In ``REAL`` mode while
+            ``runtime.allow_real_mode`` is false. That is a gate on the run,
+            not a refusal of the stage: open the gate and the stage proceeds.
+            Refusing rather than returning an empty matrix is deliberate, and
+            would still be - an empty matrix would claim every isolate is
+            identical.
         DataContractError: A manifest sample is not a tip in the tree, or the
             tree has no tips.
     """
@@ -557,12 +563,14 @@ def run(
         # and this matrix is a measurement of one specific tree, so a
         # re-inference would silently change the numbers being reported.
         #
-        # The gate lives here rather than in a script because there is no
-        # `scripts/similarity/run_similarity.py` - the Snakefile rule points at a
-        # runner nobody wrote, which is the same reason this stage sits in
-        # UNBUILT_STAGES. Every other REAL caller checks `allow_real_mode` in its
-        # entry-point script; until that script exists, the stage is the only
-        # place the check can be.
+        # The gate lives here as well as in the runners, and both layers are
+        # real. `scripts/common/run_stage.py` refuses a forbidden mode through
+        # `resolve_mode` before any stage is reached, and the per-stage entry
+        # scripts (`scripts/amr/run_amr.py` and its siblings) check the flag
+        # themselves. This stage has no `scripts/similarity/run_similarity.py`
+        # of its own, so its own check covers direct callers of `run()` - which
+        # is how the gate is tested - rather than being the only check in
+        # existence.
         if not bool(config.runtime.get("allow_real_mode", False)):
             raise NotImplementedError(
                 "REAL-mode similarity is gated: runtime.allow_real_mode is false. "
