@@ -2094,18 +2094,32 @@ def run(
         #   1. No real engine was injected, so the run would reach
         #      `ReferenceEngine` - Fisher's exact with BH and no
         #      population-structure correction, documented for pipeline
-        #      mechanics only. `run.py`'s stage-12 call site passes no
-        #      `engine=`, so this is today's default, not a hypothetical.
+        #      mechanics only. `run.py` DOES pass `engine=`: its stage-12 call
+        #      site passes `engine=_build_gwas_engine(config, resolved,
+        #      intermediate)`. What that helper returns in REAL is `None`
+        #      unless pyseer resolves from the machine config (PATH first,
+        #      then the overlay's `tool_search_dirs`), and it is that `None` -
+        #      or a caller that explicitly injects a `ReferenceEngine` - that
+        #      reaches this guard. So the live condition is "pyseer is missing
+        #      or the wrong engine was injected", not "the call site was never
+        #      wired".
         #   2. Even with `PyseerEngine`, this stage does not correct for
         #      *lineage* as a model term. pyseer corrects for relatedness
         #      (a random effect via `--similarity`); it does not take lineage as
         #      a fixed effect here, because doing so needs pyseer's
-        #      `--lineage`, which in turn requires a `--distances` matrix that
-        #      stage 10 does not currently write in a usable form. Lineage is
-        #      therefore handled by *flagging* a lineage-confounded feature
-        #      (`is_lineage_confounded`), not by removing the confounding from
-        #      the model. A flagged feature is reported as lineage-linked rather
-        #      than as resistance-associated; it is not corrected.
+        #      `--lineage`, which in turn requires a `--distances` matrix
+        #      (`pyseer/__main__.py` exits without one when `--lmm --lineage`
+        #      is passed, and `pyseer/input.py`'s `load_structure` indexes the
+        #      file as `m.loc[ids, ids]`, so the header must name every
+        #      sample). Stage 10 leaves no such file: its own writer emits the
+        #      square matrix, but `run.py`'s dispatch then overwrites that same
+        #      path with the contract form (`STAGE_TABLES["similarity"]` -
+        #      `sample_id` plus one packed `distances` column), which pyseer
+        #      cannot index. Lineage is therefore handled by *flagging* a
+        #      lineage-confounded feature (`is_lineage_confounded`), not by
+        #      removing the confounding from the model. A flagged feature is
+        #      reported as lineage-linked rather than as resistance-associated;
+        #      it is not corrected.
         #
         # Both halves are stated rather than one, because they call for
         # different fixes and a reader told only one of them will conclude the
