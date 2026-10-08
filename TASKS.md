@@ -235,10 +235,17 @@ result rather than a `DataContractError`, since pass 12b runs at a derived
 cutoff and "no variant passes" is the ordinary null outcome — but a single
 *non-header* line is refused, because reading it as "no associations" would turn
 a broken run into a reported negative result. Fourth, **the families half of 16
-is not done**: ticket 15 still has no `oprD_absent` / `oprD_LoF` producer, and
-the SNP/indel family reaches pyseer through an `.Rtab` synthesised from the
-gene presence/absence matrix, which is narrower than pyseer's `--vcf` route.
-Both are upstream of the reduction and were left alone deliberately.
+is partly done**: the sentence that used to read "ticket 15 still has no
+`oprD_absent` / `oprD_LoF` producer" was **stale and is corrected here
+(2026-10-08)** — a producer exists in code and has since the initial commit:
+`stages/gwas_features.py` calls `regulators.oprd_feature_rows`, which owns both
+verdicts, and layer 3 writes `L3_oprD_absent` / `L3_oprD_LoF_tier1` / `tier2`.
+Ticket 15's own status line still reads `ready-for-agent` with unchecked boxes,
+and the ticket file wins on status, so the ticket is **not** claimed closed
+here. What is still not done is the second half: the SNP/indel family reaches
+pyseer through an `.Rtab` synthesised from the gene presence/absence matrix,
+which is narrower than pyseer's `--vcf` route. Both were upstream of the
+reduction and were left alone deliberately.
 
 **17** is the stage that makes hits interpretable. It must require a determinant
 to appear in at least two independent lineages before calling it convergent,
@@ -516,10 +523,10 @@ means more than a test run on this machine.
 |---|---|---|
 | **Meropenem enablement** | **wired and verified (config only)** | `config/science.yaml` `antibiotics:` is `imipenem, meropenem`; the `config/antibiotics.tsv` meropenem row is enabled; all 22 `config/mechanisms.tsv` data rows read `imipenem,meropenem` (21 rewritten here, `oprD` already had both). **No analysis code changed.** |
 | **Cohort gate** (`papipeline/cohort_gate.py`) | **wired, not verified on a real cohort** | Evaluated before stage 1 in every mode, recorded on `RunResult` and unioned into `run_manifest.json` under `cohort_gate`. Keys: `cohort_gate.intermediate_policy` (default `exclude`), `cohort_gate.min_resistant` (default `100`) — **enforced in REAL only**, because the 20-sample TEST fixture is 7 R of 20, below the floor by construction. Counts are recorded in every mode, so the gate is never silent. Observed on today's TEST run: `status=evaluated, n_resistant=7, n_in_cohort=17, enforced=false`. |
-| **Layer encoding** (`papipeline/layers/`) | **wired** | Called at the pangenome stage in REAL and TEST, never STUB; a TEST run writes the 8 layer files under `results/test/intermediate/stages/layers/`. Keys `layers.min_carriers: 5`, `layers.max_prevalence: 0.98`. The **unitig adapter is built and deliberately unwired**: `unitig-caller` is absent from `PATH`, its flags were never verified with `--help`, and REAL raises `UnverifiedFlagsError` rather than guess a flag. That adapter is the `oprD_absent` / `oprD_LoF` producer ticket 15 said did not exist. |
+| **Layer encoding** (`papipeline/layers/`) | **wired** | Called at the pangenome stage in REAL and TEST, never STUB; a TEST run writes the 8 layer files under `results/test/intermediate/stages/layers/`. Keys `layers.min_carriers: 5`, `layers.max_prevalence: 0.98`. The **unitig adapter is built and deliberately unwired**: `unitig-caller` is absent from `PATH`, its flags were never verified with `--help`, and REAL raises `UnverifiedFlagsError` rather than guess a flag. That adapter produces `unitigs.tsv` — it is **not** the `oprD_absent` / `oprD_LoF` producer (corrected 2026-10-08; the earlier sentence claimed it was). Those two features come from `regulators.oprd_feature_rows`, called by `stages/gwas_features.py` (wired into the run at `run.py:1506`, so `gene__oprD_absent` / `gene__oprD_LoF` reach stage 12), and layer 3 writes its own `L3_oprD_absent` / `L3_oprD_LoF_tier1` / `L3_oprD_LoF_tier2`. |
 | **Kinship** (`papipeline/gwas_real/kinship.py`) | **built and unit-verified** | 13 tests in `tests/unit/test_gwas_real_kinship.py`, a **pre-existing spec test that passes with zero edits** (the file is byte-identical to its committed state). It reuses `stages.similarity.patristic_distances` and Gower-centres the squared distances. Stage 10 `similarity` was already a registered stage; `PREREQUISITES["gwas"]` now includes `"similarity"` (`a379cf6`). |
 | **pyseer two-pass adapter** (`papipeline/gwas_real/adapter.py`) | **built, NOT wired** | Nothing outside `papipeline/gwas_real/` calls it (the only `gwas_real` hit in `papipeline/` outside the package is a comment in `run.py`). Three input resolutions are undecided; wiring it now would risk a wrong `variants_path` silently narrowing which variant families are tested — a wrong answer rather than a failure. Separate and still open: `REAL_REFUSING_STAGES["gwas"]` reads "no REAL engine", but `_build_gwas_engine` injects `PyseerEngine` in REAL when pyseer resolves, so that entry is conditional on pyseer being absent and **this build did not re-verify it**. |
-| **Downstream** (`papipeline/downstream/`) | **built; runner wired for REAL only** | Seven steps in the pinned order, positive-control gate first, writing `reports/downstream_evidence.tsv`. **Not exercised in TEST**: measured, `run_control_gate` raises on the committed fixtures because `any_MBL` and `oprD_burden` are both absent from stage 12's TEST results, and `build_report` re-runs the gate with no disable flag — wiring it unconditionally would fail every TEST run. Steps 2–7 were measured to execute correctly on TEST fixtures once the gate is fed a recovering baseline. Two tests pin the mode gate from both ends; today's TEST run wrote no downstream artefact (asserted). |
+| **Downstream** (`papipeline/downstream/`) | **built; runner wired for REAL only** | Seven steps in the pinned order, positive-control gate first, writing `reports/downstream_evidence.tsv`. **Not exercised in TEST**: measured, `run_control_gate` raises on the committed fixtures because `any_MBL` is absent from stage 12's TEST results and `oprD_burden` is present but not significant (`gene__oprD_LoF`, best adjusted p = 0.901 > 0.05), and `build_report` re-runs the gate with no disable flag — wiring it unconditionally would fail every TEST run. The two reasons are different on purpose: absent and not-significant are the distinction `controls.py` exists to draw, so the docs must not collapse it. Steps 2–7 were measured to execute correctly on TEST fixtures once the gate is fed a recovering baseline. Two tests pin the mode gate from both ends; today's TEST run wrote no downstream artefact (asserted). |
 | **Linux runner** (`scripts/linux/`, `config/machines/linux.yaml`, `docs/LINUX_RUN.md`, `docs/PIPELINE_FLOWCHART.md`) | **built, never executed on a Linux host** | `micromamba create --dry-run --platform linux-64 -f environment/environment-linux.yml` **FAILS as pinned** — re-run today, exit 1: `gubbins =3.4.1 * does not exist` on linux-64 (the recorded probes in `.build/linux-ready.probe.*` show every published linux-64 build is py310, and `samtools=0.1.19` needs `openssl <=1.1.1` against Python 3.11's `>=3.5.7`). The same file minus those pins solves: **357 packages** (`.build/linux-ready.solve.linux-64.core-nopy3tools.txt`). **No pin was changed**; a re-solve is deliberate work nobody has done. `shellcheck` is not installed — substitute evidence is `bash -n` on all three scripts (re-run today, exit 0). `config/machines/linux.yaml` sets `allow_real_mode: false`. |
 
 ### Deliberately unwired, and why
@@ -580,6 +587,27 @@ a clean checkout today.
    here closes it.
 8. **`REAL_REFUSING_STAGES["gwas"]`** — conditional on pyseer being absent;
    not re-verified by this build.
+9. **The layer outputs are produced-only.** `papipeline/layers/` is wired as a
+   producer at the pangenome stage, but nothing outside `papipeline/layers/` and
+   its tests reads `intermediate/stages/layers/*`: stage 12 reads
+   `gwas_features.tsv` and nothing else (`run.py:1505` is a `record("layers",
+   ...)` call, not a consumer). The 8 layer files are also absent from
+   `docs/data_contract.md`, which documents the downstream evidence table.
+   Found by the reviewer 2026-10-08; record a consumer or state plainly that
+   the layers are currently an inspectable side output.
+10. **The `gwas <- similarity` edge's rationale prose outlived its data flow.**
+    `papipeline/run.py`'s `PREREQUISITES` comment and `config/science.yaml`'s
+    `gwas_real.lineage` comment both said the REAL path reads stage 10's matrix
+    as pyseer's `--distances`; the wired path (`_build_gwas_engine` →
+    `PyseerEngine`) passes `--similarity` from its own kinship matrix and never
+    `--lineage`, so only the **unwired** adapter reads that file. Both comments
+    corrected 2026-10-08 (reviewer blocking issue 2). The same wording survives
+    in the class docstring and one assertion message of
+    `tests/integration/test_stage_taxonomy.py::TestTheGwasPrerequisiteOnStageTen`
+    — **deliberately not edited**, because no test is edited on this build; the
+    assertions themselves are true and were left byte-identical. A test-owner
+    pass should reword that prose to say "the adapter path" rather than "stage
+    12's REAL path".
 
 ---
 
@@ -603,7 +631,7 @@ well-tested and unwired while their tickets read "done":
 | continuous trait in the GWAS model | **built** - the model still takes binary R-vs-S | ticket 16, not started |
 | SNP calling vs PAO1 (`variants`) | **wired** | Corrected 2026-10-08: this row read "**not built** … No stage in `STAGE_ORDER`", which is false. `variants` is in `STAGE_ORDER`, in `EXECUTION_ORDER`, and dispatched (`papipeline/run.py:1299`); `UNBUILT_STAGES` is `{}`. ticket 14. **Real data:** `docs/STATUS.md` records stage 6 running on the round-12 10-isolate smoke subset (509,612 alleles over 9 isolates), while ticket 14's own status line still says a REAL run has not reached stage 6. That contradiction is pre-existing and is **not** resolved here. |
 | recombination masking (`recombination`) | **wired** | Corrected 2026-10-08: also read "**not built** … No stage in `STAGE_ORDER`". It is in `STAGE_ORDER` and dispatched through `derive_recombination_tables` (`papipeline/run.py:1542`); in REAL its `run()` raises only while `runtime.allow_real_mode` is false, which is a gate on the run, not a refusal of the stage. spec D1 stage 8 (gubbins). **Still unrunnable on this machine**: the conda gubbins binary segfaults (BLOCKER 2, findings unchanged) and the source build has not been run (`tools/gubbins` absent). |
-| similarity matrix (`similarity`) | **wired** | Corrected 2026-10-08: also read "**not built** … No stage in `STAGE_ORDER`". It is in `STAGE_ORDER` and dispatched (`papipeline/run.py:1596`); REAL is gated by `allow_real_mode`, not refused. spec D1 stage 10 (tree distance). `PREREQUISITES["gwas"]` names it since `a379cf6`, because the REAL pyseer path consumes its matrix as `--distances`. Never run on real data. |
+| similarity matrix (`similarity`) | **wired** | Corrected 2026-10-08: also read "**not built** … No stage in `STAGE_ORDER`". It is in `STAGE_ORDER` and dispatched (`papipeline/run.py:1596`); REAL is gated by `allow_real_mode`, not refused. spec D1 stage 10 (tree distance). `PREREQUISITES["gwas"]` names it since `a379cf6`, because the pyseer **adapter** (`papipeline/gwas_real/`, built, not wired) takes its `--distances` matrix from this table — the wired `PyseerEngine` path passes `--similarity` from a kinship matrix it builds itself and never reads it. Never run on real data. |
 
 ### Phase 3, first pass: the workflow loads, and has never run
 

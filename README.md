@@ -374,10 +374,13 @@ with the reason.
    fixtures ship only `imipenem_phenotype.tsv`. It needs a meropenem phenotype
    fixture first — open work, not done.
 9. **`unitig-caller` is absent and its flags were never verified with
-   `--help`.** The adapter built for ticket 15's `oprD_absent` / `oprD_LoF`
-   producer records that and REAL raises `UnverifiedFlagsError` rather than
-   guess a flag, so the producer is built but deliberately produces nothing in
-   REAL. Install the tool, run `--help`, record the real flags.
+   `--help`.** `papipeline/layers/unitigs.py` records that and REAL raises
+   `UnverifiedFlagsError` rather than guess a flag, so the unitig screen is
+   stubbed in TEST/STUB and deliberately produces nothing in REAL. Install the
+   tool, run `--help`, record the real flags. The `oprD_absent` / `oprD_LoF`
+   features are **not** what this adapter produces — they come from
+   `regulators.oprd_feature_rows` via the stage-12 feature builder, and layer 3
+   writes `L3_oprD_absent` / `L3_oprD_LoF_tier1` / `tier2`.
 
 ## Documentation
 
