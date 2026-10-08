@@ -203,6 +203,12 @@ UNBUILT_STAGES: Mapping[str, str] = {}
 #: confounding a real cohort, so it refuses instead (f90d6c9, 46f5005). Same
 #: reasoning for `convergence` and `cooccurrence` (46f5005).
 #:
+#: `gwas`'s refusal is CONDITIONAL in practice, and the value below says so:
+#: `_build_gwas_engine` injects `PyseerEngine` when pyseer resolves from the
+#: machine config, so what the refusal stands against is an unresolvable
+#: pyseer - or an explicitly injected `ReferenceEngine` - reaching Fisher's
+#: exact on a real cohort instead.
+#:
 #: Reported separately because "runnable" cannot mean one thing and its opposite
 #: at the same time. `tests/integration/test_stage_taxonomy_is_self_verifying.py`
 #: asserts this set equals the set of stage modules whose `run()` refuses REAL -
@@ -214,7 +220,10 @@ UNBUILT_STAGES: Mapping[str, str] = {}
 #: because `runtime.allow_real_mode` is false. That is a gate on the run, not a
 #: refusal of the stage: `similarity` does it and works once the gate is open.
 REAL_REFUSING_STAGES: Mapping[str, str] = {
-    "gwas": "no REAL engine: ReferenceEngine cannot handle lineage confounding",
+    "gwas": (
+        "no REAL engine unless PyseerEngine was injected (pyseer resolved): "
+        "ReferenceEngine cannot handle lineage confounding"
+    ),
     "convergence": "REAL convergence would be indistinguishable from TEST",
     "cooccurrence": "REAL co-occurrence cannot be tested on a synthetic cohort",
 }
