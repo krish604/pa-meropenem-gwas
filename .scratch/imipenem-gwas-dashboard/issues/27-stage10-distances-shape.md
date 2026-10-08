@@ -25,7 +25,7 @@ adapter.py`, built, NOT wired), which takes its `--distances` path from
    validation (`has_columns`) requires a `distances` column — a square header
    would FAIL validation.
    **Mechanism:** `stages/similarity.py::run(out_path=...)` first calls
-   `write_matrix` (square), then `run.py:1619-1627` calls
+   `write_matrix` (square), then `run.py:1630-1636` calls
    `write_tsv(table_path(stage_dir, "similarity"), similarity_rows, ...)` on
    **the same path** — the packed two-column form overwrites the square
    matrix. Last writer wins. Verified on the TEST run:

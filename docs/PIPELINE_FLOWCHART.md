@@ -100,7 +100,7 @@ flowchart TD
 |---|---|
 | green | ran on **real** data — 8 of 16 stages, on a 10-isolate smoke cohort (`docs/STATUS.md`) |
 | amber | built and dispatched, but **never run on real data** |
-| red | **refuses REAL** by design — `papipeline.run.REAL_REFUSING_STAGES`: stage 12 has no REAL engine (lineage confounding), stage 13 would be indistinguishable from TEST, stage 14 cannot be tested on a synthetic cohort |
+| red | **refuses REAL** by design — `papipeline.run.REAL_REFUSING_STAGES`: stage 12 has no REAL engine unless pyseer resolves to `PyseerEngine` (lineage confounding), stage 13 would be indistinguishable from TEST, stage 14 cannot be tested on a synthetic cohort |
 
 No cell of that legend is a biological result. `docs/STATUS.md` opens with the
 same warning: n = 10 is grossly underpowered.
